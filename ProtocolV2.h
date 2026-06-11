@@ -58,6 +58,10 @@ public:
                       eResolution_t resolution = RESOLUTION_DEFAULT);
   bool stopRecording(eMediaType_t mediaType);
 
+  bool e2eStartRecording(void);
+  bool e2eStopRecording(void);
+  bool e2eSendAnnotation(String annotation);
+
 public:
   int16_t maxID;
   int16_t total_results;
@@ -69,6 +73,7 @@ public:
   Stream *stream = NULL;
   unsigned long timeOutDuration = 5000;
   unsigned long timeOutTimer;
+  const uint8_t addr = 0x60;
 };
 
 #endif // DFROBOT_HUSKEYLENS_V2_RESULT_H

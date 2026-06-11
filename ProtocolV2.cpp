@@ -194,12 +194,12 @@ void ProtocolV2::protocolWrite(uint8_t *buffer, int length) {
     uint16_t packets = length / MAX_PL_LEN;
     uint16_t remain = length % MAX_PL_LEN;
     for(uint16_t i = 0; i < packets; i++){
-        wire->beginTransmission(0x50);
+        wire->beginTransmission(addr);
         wire->write(buffer + i * MAX_PL_LEN, MAX_PL_LEN);
         wire->endTransmission();
     }
     if(remain){
-        wire->beginTransmission(0x50);
+        wire->beginTransmission(addr);
         wire->write(buffer + packets * MAX_PL_LEN, remain);
         wire->endTransmission();
     }
@@ -221,7 +221,7 @@ bool ProtocolV2::protocolAvailable() {
   if (wire) {
     if (!wire->available()) {
       wire->setClock(100000);
-      wire->requestFrom(0x50, 16);
+      wire->requestFrom(addr, 16);
     }
     while (wire->available()) {
       uint8_t result = wire->read();
@@ -1073,6 +1073,79 @@ bool ProtocolV2::stopRecording(eMediaType_t mediaType) {
   husky_lens_protocol_write_uint8(0);
   husky_lens_protocol_write_uint8(mediaType);
   husky_lens_protocol_write_zero_bytes(8);
+  int length = husky_lens_protocol_write_end();
+
+  for (int i = 0; i < retry; i++) {
+    protocolWrite(buffer, length);
+    if (wait(COMMAND_RETURN_ARGS)) {
+      PacketHead_t *head = (PacketHead_t *)receive_buffer;
+      PacketData_t *packet = (PacketData_t *)head->data;
+
+      if (packet->retValue == 0) {
+        ret = true;
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+
+bool ProtocolV2::e2eStartRecording(void) {
+  DBG("\n");
+  bool ret = false;
+  uint8_t *buffer = husky_lens_protocol_write_begin(
+    ALGORITHM_ANY, COMMAND_ACTION_E2E_START_RECORDING);
+  husky_lens_protocol_write_zero_bytes(10);
+  int length = husky_lens_protocol_write_end();
+
+  for (int i = 0; i < retry; i++) {
+    protocolWrite(buffer, length);
+    if (wait(COMMAND_RETURN_ARGS)) {
+      PacketHead_t *head = (PacketHead_t *)receive_buffer;
+      PacketData_t *packet = (PacketData_t *)head->data;
+
+      if (packet->retValue == 0) {
+        ret = true;
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+bool ProtocolV2::e2eStopRecording(void) {
+  DBG("\n");
+  bool ret = false;
+  uint8_t *buffer = husky_lens_protocol_write_begin(
+    ALGORITHM_ANY, COMMAND_ACTION_E2E_STOP_RECORDING);
+  husky_lens_protocol_write_zero_bytes(10);
+  int length = husky_lens_protocol_write_end();
+
+  for (int i = 0; i < retry; i++) {
+    protocolWrite(buffer, length);
+    if (wait(COMMAND_RETURN_ARGS)) {
+      PacketHead_t *head = (PacketHead_t *)receive_buffer;
+      PacketData_t *packet = (PacketData_t *)head->data;
+
+      if (packet->retValue == 0) {
+        ret = true;
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+bool ProtocolV2::e2eSendAnnotation(String annotation) {
+  DBG("\n");
+  bool ret = false;
+  uint8_t *buffer = husky_lens_protocol_write_begin(
+    ALGORITHM_ANY, COMMAND_ACTION_E2E_SEND_ANNOTATION);
+  husky_lens_protocol_write_zero_bytes(10);
+  if (annotation.length() > 0) {
+    husky_lens_protocol_write_string(annotation);
+  }
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {

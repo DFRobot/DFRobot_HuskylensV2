@@ -2,6 +2,8 @@
 #define DFROBOT_HUSKEYLENS_V2_COMMON_H
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
 #include <Stream.h>
 #if 0
 #define DBG(x)                                                                 \
@@ -132,6 +134,11 @@ typedef enum protocolCommand {
   COMMAND_ACTION_START_RECORDING = 0x2E,
   COMMAND_ACTION_STOP_RECORDING = 0x2F,
   // RFU 0x30 - 0x3F
+
+  COMMAND_ACTION_E2E_START_RECORDING  = 0x30, 
+  COMMAND_ACTION_E2E_STOP_RECORDING   = 0x31,
+  COMMAND_ACTION_E2E_SEND_ANNOTATION   = 0x32,
+
 } eProtocolCommand_t;
 
 typedef enum {

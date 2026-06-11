@@ -87,6 +87,10 @@ COMMAND_ACTION_DRAW_UNIQUE_RECT = 0x2D
 COMMAND_ACTION_START_RECORDING  = 0x2E
 COMMAND_ACTION_STOP_RECORDING   = 0x2F
 
+COMMAND_ACTION_E2E_START_RECORDING  = 0x30
+COMMAND_ACTION_E2E_STOP_RECORDING   = 0x31
+COMMAND_ACTION_E2E_SEND_ANNOTATION  = 0x32
+
 ALGORITHM_ANY = 0
 ALGORITHM_FACE_RECOGNITION = 1
 ALGORITHM_OBJECT_RECOGNITION = 2
@@ -804,6 +808,31 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_zero_bytes(8)
         self.husky_lens_protocol_write_end()
         
+        ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
+        return ret
+
+    def e2eStartRecording(self):
+        self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_E2E_START_RECORDING)
+        self.husky_lens_protocol_write_zero_bytes(10)
+        self.husky_lens_protocol_write_end()
+
+        ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
+        return ret
+
+    def e2eStopRecording(self):
+        self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_E2E_STOP_RECORDING)
+        self.husky_lens_protocol_write_zero_bytes(10)
+        self.husky_lens_protocol_write_end()
+
+        ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
+        return ret
+
+    def e2eSendAnnotation(self, annotation:str):
+        self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_E2E_SEND_ANNOTATION)
+        self.husky_lens_protocol_write_zero_bytes(10)
+        self.husky_lens_protocol_write_string(annotation)
+        self.husky_lens_protocol_write_end()
+
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
         return ret
 
