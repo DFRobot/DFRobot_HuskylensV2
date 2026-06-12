@@ -73,7 +73,7 @@ public:
   Stream *stream = NULL;
   unsigned long timeOutDuration = 5000;
   unsigned long timeOutTimer;
-  const uint8_t addr = 0x60;
+  const uint8_t addr = 0x50;
 };
 
 #endif // DFROBOT_HUSKEYLENS_V2_RESULT_H
