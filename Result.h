@@ -3,7 +3,9 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include <Wire.h>
+#if defined(ARDUINO_AVR_UNO) || defined(ESP8266) || defined(ARDUINO_AVR_NANO)
 #include <SoftwareSerial.h>
+#endif
 #include <Stream.h>
 #if 0
 #define DBG(x)                                                                 \
