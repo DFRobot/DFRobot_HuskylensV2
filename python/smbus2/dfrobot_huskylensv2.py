@@ -7,6 +7,7 @@ import math
 import struct
 import logging
 import smbus2
+from smbus2 import i2c_msg
 import serial
 
 logging.basicConfig(
@@ -445,33 +446,75 @@ class ProtocolV2(object):
             offset += length
         return retValue == 0, retInt, retStr
 
-    def husky_lens_protocol_receive(self, data): 
+    def _reset_receive_state(self, data=None):
+        self.receive_index = HEADER_0_INDEX
+        if data == 0x55:
+            self.receive_buffer[HEADER_0_INDEX] = 0x55
+            self.receive_index = HEADER_1_INDEX
+
+    def husky_lens_protocol_receive(self, data):
+        data &= 0xFF
+        max_content = min(255, self.FRAME_BUFFER_SIZE - PROTOCOL_SIZE)
+
         if self.receive_index == HEADER_0_INDEX:
             if data != 0x55:
-                self.receive_index = HEADER_0_INDEX
                 return False
-            self.receive_buffer[self.receive_index] = 0x55
-        elif self.receive_index == HEADER_1_INDEX:
-            if data != 0xaa:
-                self.receive_index = HEADER_0_INDEX
+            self.receive_buffer[HEADER_0_INDEX] = 0x55
+            self.receive_index = HEADER_1_INDEX
+            return False
+
+        if self.receive_index == HEADER_1_INDEX:
+            if data != 0xAA:
+                # 0x55 0x55 AA：把当前字节当作新的包头
+                self._reset_receive_state(data)
                 return False
-            self.receive_buffer[self.receive_index] = 0xaa
-        elif self.receive_index == COMMAND_INDEX:
-            self.receive_buffer[self.receive_index] = data
-        elif self.receive_index == ALGO_INDEX:
-            self.receive_buffer[self.receive_index] = data
-        elif self.receive_index == CONTENT_SIZE_INDEX:
-            if self.receive_index >= self.FRAME_BUFFER_SIZE - PROTOCOL_SIZE:
-                self.receive_index = 0
+            self.receive_buffer[HEADER_1_INDEX] = 0xAA
+            self.receive_index = COMMAND_INDEX
+            return False
+
+        if self.receive_index == COMMAND_INDEX:
+            self.receive_buffer[COMMAND_INDEX] = data
+            self.receive_index = ALGO_INDEX
+            return False
+
+        if self.receive_index == ALGO_INDEX:
+            self.receive_buffer[ALGO_INDEX] = data
+            self.receive_index = CONTENT_SIZE_INDEX
+            return False
+
+        if self.receive_index == CONTENT_SIZE_INDEX:
+            if data > max_content:
+                logging.debug("invalid content size %s, drop and resync", data)
+                self._reset_receive_state(data)
                 return False
-            self.receive_buffer[self.receive_index] = data
-        else:
-            self.receive_buffer[self.receive_index] = data
-            if self.receive_index == self.receive_buffer[CONTENT_SIZE_INDEX] + CONTENT_INDEX:
-                logging.debug(f"<--------self.receive_index={self.receive_index}")
-                self.print_hex(self.receive_buffer[0:self.receive_index + 1])
-                cs = self.checksum(self.receive_buffer[0:self.receive_index])
-                return cs == self.receive_buffer[self.receive_index]
+            self.receive_buffer[CONTENT_SIZE_INDEX] = data
+            self.receive_index = CONTENT_INDEX
+            return False
+
+        if self.receive_index >= self.FRAME_BUFFER_SIZE:
+            logging.debug("receive buffer overflow, drop and resync")
+            self._reset_receive_state(data)
+            return False
+
+        self.receive_buffer[self.receive_index] = data
+        frame_end = self.receive_buffer[CONTENT_SIZE_INDEX] + CONTENT_INDEX
+        if self.receive_index == frame_end:
+            frame = self.receive_buffer[0:self.receive_index + 1]
+            logging.debug(f"<--------self.receive_index={self.receive_index}")
+            self.print_hex(frame)
+            valid = (
+                len(frame) >= PROTOCOL_SIZE
+                and frame[HEADER_0_INDEX] == 0x55
+                and frame[HEADER_1_INDEX] == 0xAA
+                and self.checksum(frame[:-1]) == frame[-1]
+            )
+            # 无论校验成败都复位，避免错误长度把后续真包继续吞掉
+            self.receive_index = HEADER_0_INDEX
+            if not valid:
+                logging.debug("invalid frame header/checksum, drop and resync")
+                self._reset_receive_state(data)
+            return valid
+
         self.receive_index += 1
         return False
 
@@ -954,10 +997,10 @@ class HuskylensV2_I2C(HuskylensV2):
 
     def _write_to_huskyLens(self):
         self._connect = 0
-        command = self.send_buffer[0:self.send_index]
+        command = bytes(self.send_buffer[0:self.send_index])
         while True:
             try:
-                self.bus.write_i2c_block_data(self.i2c_addr, 0, command)
+                self.bus.i2c_rdwr(i2c_msg.write(self.i2c_addr, command))
                 logging.debug("_write_to_huskyLens ----->")
                 self.print_hex(command)
                 time.sleep(0.05)
