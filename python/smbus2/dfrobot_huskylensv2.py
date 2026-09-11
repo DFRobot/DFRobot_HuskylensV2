@@ -336,13 +336,28 @@ class ProtocolV2(object):
         hex_cmd = [hex(x) for x in cmd]
         logging.debug(hex_cmd)
 
+    def _log_dropped_frame(self, reason, frame=None, extra=""):
+        parts = ["dropped packet:", reason]
+        if extra:
+            parts.append(extra)
+        if frame:
+            parts.append("len=%d" % len(frame))
+            parts.append("data=" + str([hex(x) for x in frame]))
+        logging.warning(" ".join(parts))
+
     def checksum(self, cmd):
         cs = 0
         for x in cmd:
             cs += x
         return cs & 0xff
 
+    def _flush_device_rx(self):
+        self._clear_read_queue()
+        self._reset_receive_state()
+
     def knock(self):
+        # 初始化时清一次设备残留；后续写命令不再清
+        self._flush_device_rx()
         self.husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_KNOCK)
         self.husky_lens_protocol_write_uint8(1)
         self.husky_lens_protocol_write_zero_bytes(9)
@@ -356,8 +371,14 @@ class ProtocolV2(object):
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_INFO)
         if not ret:
+            self._log_dropped_frame("getResult RETURN_INFO failed", extra="algo=%d" % algo)
             return None
         if self.receive_index != CONTENT_INDEX + 10:
+            self._log_dropped_frame(
+                "getResult invalid RETURN_INFO length",
+                extra="algo=%d receive_index=%d expect=%d" % (
+                    algo, self.receive_index, CONTENT_INDEX + 10),
+            )
             return None
         
         logging.debug(f"receive_index={self.receive_index}")
@@ -370,6 +391,11 @@ class ProtocolV2(object):
         for i in range(self.result[algo]["info"].total_blocks):
             ret, _, _ = self.wait(COMMAND_RETURN_BLOCK)
             if not ret:
+                self._log_dropped_frame(
+                    "getResult RETURN_BLOCK failed",
+                    extra="algo=%d block=%d/%d" % (
+                        algo, i, self.result[algo]["info"].total_blocks),
+                )
                 return None
             L = self.receive_buffer[CONTENT_SIZE_INDEX] + PROTOCOL_SIZE
             if algo == ALGORITHM_FACE_RECOGNITION:
@@ -385,6 +411,11 @@ class ProtocolV2(object):
         for i in range(self.result[algo]["info"].total_arrows):
             ret, _, _ = self.wait(COMMAND_RETURN_ARROW)
             if not ret:
+                self._log_dropped_frame(
+                    "getResult RETURN_ARROW failed",
+                    extra="algo=%d arrow=%d/%d" % (
+                        algo, i, self.result[algo]["info"].total_arrows),
+                )
                 return None
             L = self.receive_buffer[CONTENT_SIZE_INDEX] + PROTOCOL_SIZE
             if algo == ALGORITHM_LINE_TRACKING:
@@ -393,10 +424,18 @@ class ProtocolV2(object):
             self.result[algo]["blocks"].append(ret)
         return self.result[algo]["info"].total_results
 
+    def _clear_read_queue(self):
+        if hasattr(self, "q"):
+            while not self.q.empty():
+                self.q.get()
+
     def wait(self, command):
         receiving = True
         self.receive_buffer = bytearray(1024)
         self.receive_index = HEADER_0_INDEX
+        # 只清 I2C 队列；UART 仍按流读，下一帧可能已在队列里
+        if hasattr(self, "bus"):
+            self._clear_read_queue()
         start_ms = time.time_ns() // 1_000_000
         while receiving:
             now_ms = time.time_ns() // 1_000_000
@@ -409,8 +448,20 @@ class ProtocolV2(object):
             if self.husky_lens_protocol_receive(c):
                 receiving = False
         if receiving:
+            self._log_dropped_frame(
+                "wait timeout 8s",
+                extra="expect_cmd=%s receive_index=%d" % (hex(command), self.receive_index),
+            )
+            self._flush_device_rx()
             return False, [], []
         if command != self.receive_buffer[COMMAND_INDEX]:
+            self._log_dropped_frame(
+                "unexpected command",
+                self.receive_buffer[0:self.receive_index + 1],
+                extra="expect_cmd=%s got_cmd=%s" % (
+                    hex(command), hex(self.receive_buffer[COMMAND_INDEX])),
+            )
+            self._flush_device_rx()
             return False, [], []
         retInt = []
         retStr = []
@@ -484,7 +535,7 @@ class ProtocolV2(object):
 
         if self.receive_index == CONTENT_SIZE_INDEX:
             if data > max_content:
-                logging.debug("invalid content size %s, drop and resync", data)
+                self._log_dropped_frame("invalid content size", extra="size=%d" % data)
                 self._reset_receive_state(data)
                 return False
             self.receive_buffer[CONTENT_SIZE_INDEX] = data
@@ -492,7 +543,7 @@ class ProtocolV2(object):
             return False
 
         if self.receive_index >= self.FRAME_BUFFER_SIZE:
-            logging.debug("receive buffer overflow, drop and resync")
+            self._log_dropped_frame("receive buffer overflow")
             self._reset_receive_state(data)
             return False
 
@@ -502,18 +553,25 @@ class ProtocolV2(object):
             frame = self.receive_buffer[0:self.receive_index + 1]
             logging.debug(f"<--------self.receive_index={self.receive_index}")
             self.print_hex(frame)
+            calc_cs = self.checksum(frame[:-1])
+            recv_cs = frame[-1]
             valid = (
                 len(frame) >= PROTOCOL_SIZE
                 and frame[HEADER_0_INDEX] == 0x55
                 and frame[HEADER_1_INDEX] == 0xAA
-                and self.checksum(frame[:-1]) == frame[-1]
+                and calc_cs == recv_cs
             )
-            # 无论校验成败都复位，避免错误长度把后续真包继续吞掉
-            self.receive_index = HEADER_0_INDEX
             if not valid:
-                logging.debug("invalid frame header/checksum, drop and resync")
+                self._log_dropped_frame(
+                    "checksum/header mismatch",
+                    frame,
+                    extra="receive_index=%d calc_cs=%d recv_cs=%d" % (
+                        self.receive_index, calc_cs, recv_cs),
+                )
                 self._reset_receive_state(data)
-            return valid
+                return False
+            # 合法帧保留 receive_index 在校验和位置，getResult() 用它判断内容长度
+            return True
 
         self.receive_index += 1
         return False
@@ -995,6 +1053,51 @@ class HuskylensV2_I2C(HuskylensV2):
     def _error_handling(self):
         self._connect += 1
 
+    def _flush_device_rx(self, timeout_ms=150, max_bytes=2048):
+        """knock/begin 初始化时丢掉设备 TX FIFO / 主机队列里的旧帧。
+
+        I2C 没有 data-ready：FIFO 空时读到的是 0xFF 填充。
+        连续两轮 16 字节全 0xFF 视为已空；超时或读满则停。
+        """
+        self._clear_read_queue()
+        idle_reads = 0
+        flushed = 0
+        saw_header = False
+        reason = "max_bytes"
+        start_ms = time.time_ns() // 1_000_000
+        while flushed < max_bytes:
+            now_ms = time.time_ns() // 1_000_000
+            if now_ms - start_ms > timeout_ms:
+                reason = "timeout"
+                break
+            try:
+                data = self._i2c_read_bytes(16)
+            except Exception as e:
+                reason = "i2c_error"
+                logging.warning("flush rx I2C error: %s", e)
+                break
+            if not data:
+                reason = "empty"
+                break
+            flushed += len(data)
+            if 0x55 in data:
+                saw_header = True
+            if all(b == 0xFF for b in data):
+                idle_reads += 1
+                if idle_reads >= 2:
+                    reason = "idle"
+                    break
+            else:
+                idle_reads = 0
+        self._clear_read_queue()
+        self._reset_receive_state()
+        elapsed_ms = time.time_ns() // 1_000_000 - start_ms
+        if saw_header or reason not in ("idle", "empty"):
+            logging.info(
+                "flush rx: %d ms, bytes=%d, leftover_header=%s, reason=%s",
+                elapsed_ms, flushed, saw_header, reason,
+            )
+
     def _write_to_huskyLens(self):
         self._connect = 0
         command = bytes(self.send_buffer[0:self.send_index])
@@ -1005,19 +1108,35 @@ class HuskylensV2_I2C(HuskylensV2):
                 self.print_hex(command)
                 time.sleep(0.05)
                 return
-            except:
+            except Exception as e:
+                logging.warning("I2C write failed (%d/%d): %s", self._connect + 1, self.ERROR_COUNT, e)
+                self._clear_read_queue()
+                self._reset_receive_state()
                 self._error_handling()
             if self._connect > self.ERROR_COUNT:
                 raise ValueError("Please check the huskylens connection or Reconnection sensor!!!")
+
+    def _i2c_read_bytes(self, n):
+        if n < 1:
+            n = 1
+        msg = i2c_msg.read(self.i2c_addr, n)
+        self.bus.i2c_rdwr(msg)
+        return bytes(msg)
+
+    def _read_need(self):
+        # 包头未齐：只补齐 55 AA CMD ALGO LEN，不再固定读 32
+        if self.receive_index <= CONTENT_SIZE_INDEX:
+            return CONTENT_SIZE_INDEX - self.receive_index + 1
+        frame_end = self.receive_buffer[CONTENT_SIZE_INDEX] + CONTENT_INDEX
+        return max(1, frame_end - self.receive_index + 1)
 
     def _read_from_huskyLens(self):
         self._connect = 0
         if self.q.empty():
             try:
-                d = self.bus.read_i2c_block_data(self.i2c_addr, 0, 32)
-                for c in d:
+                for c in self._i2c_read_bytes(self._read_need()):
                     self.q.put(c)
-            except:
+            except Exception:
                 time.sleep(0.01)
         if self.q.empty():
             return None
@@ -1037,7 +1156,18 @@ class HuskylensV2_UART(HuskylensV2):
 
     def _error_handling(self):
         self._connect += 1
-  
+
+    def _flush_device_rx(self):
+        self._clear_read_queue()
+        try:
+            n = self.uart.in_waiting
+            if n:
+                self.uart.read(n)
+        except Exception:
+            pass
+        self._clear_read_queue()
+        self._reset_receive_state()
+
     def _write_to_huskyLens(self):
         self._connect = 0
         command = self.send_buffer[0:self.send_index]
@@ -1049,7 +1179,8 @@ class HuskylensV2_UART(HuskylensV2):
                 self.print_hex(command)
                 time.sleep(0.1)
                 return
-            except:
+            except Exception as e:
+                logging.warning("UART write failed (%d/%d): %s", self._connect + 1, self.ERROR_COUNT, e)
                 self._error_handling()
             if self._connect > self.ERROR_COUNT:
                 raise ValueError("Please check the huskylens connection or Reconnection sensor!!!")
@@ -1062,7 +1193,7 @@ class HuskylensV2_UART(HuskylensV2):
                 d = self.uart.read(32)
                 for c in d:
                     self.q.put(c)
-            except:
+            except Exception:
                 time.sleep(0.01)
         if self.q.empty():
             return None
