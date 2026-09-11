@@ -11,7 +11,7 @@ from smbus2 import i2c_msg
 import serial
 
 logging.basicConfig(
-    level=logging.INFO,                # logging level：DEBUG/INFO/WARNING/ERROR
+    level=logging.ERROR,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
@@ -197,8 +197,42 @@ class PacketData_t(ctypes.Structure):
         super().__init__()
 
 def read_u16(buf, idx):
-    """读取小端 uint16"""
-    return buf[idx] | (buf[idx+1] << 8)
+    """读取小端 uint16。越界返回 None。"""
+    if idx < 0 or idx + 1 >= len(buf):
+        return None
+    return buf[idx] | (buf[idx + 1] << 8)
+
+def validate_result_payload(buf, keypoint_bytes=0):
+    """校验 BLOCK/ARROW 内部布局是否装得进 LEN。通过返回 None，失败返回原因。"""
+    if len(buf) < PROTOCOL_SIZE:
+        return "buf<%d" % PROTOCOL_SIZE
+    ln = buf[CONTENT_SIZE_INDEX]
+    need = ln + PROTOCOL_SIZE
+    if len(buf) < need:
+        return "buf=%d < LEN+6=%d" % (len(buf), need)
+    if ln < 10:
+        return "LEN=%d < 10" % ln
+    payload_end = CONTENT_INDEX + ln
+    pos = CONTENT_INDEX + 10
+    name_len = 0
+    content_len = 0
+    if ln > 10:
+        name_len = buf[pos]
+        pos += 1 + name_len
+        if pos > payload_end:
+            return "nameLength=%d exceeds LEN=%d" % (name_len, ln)
+        if pos < payload_end:
+            content_len = buf[pos]
+            pos += 1 + content_len
+            if pos > payload_end:
+                return "contentLength=%d exceeds LEN=%d" % (content_len, ln)
+    remain = payload_end - pos
+    if keypoint_bytes and remain < keypoint_bytes:
+        return (
+            "keypoints need %d have %d nameLength=%d contentLength=%d LEN=%d"
+            % (keypoint_bytes, remain, name_len, content_len, ln)
+        )
+    return None
 
 class Result(PacketData_t):
     def __init__(self, buf):
@@ -208,8 +242,8 @@ class Result(PacketData_t):
         self.data = buf
         self.name = ""
         self.content = ""
-        self.algo = buf[ALGO_INDEX]
-        self.dataLength = buf[CONTENT_SIZE_INDEX]
+        self.algo = buf[ALGO_INDEX] if len(buf) > ALGO_INDEX else 0
+        self.dataLength = buf[CONTENT_SIZE_INDEX] if len(buf) > CONTENT_SIZE_INDEX else 0
         base = CONTENT_INDEX
         if self.dataLength > 10:
             if len(buf) > base + 10:
@@ -217,20 +251,64 @@ class Result(PacketData_t):
             if len(buf) > base + 10 + 1 + self.nameLength:
                 self.contentLength = buf[base + 10 + 1 + self.nameLength]
         
+        self.used = False
+        self._truncated = False
+
+        if len(buf) < CONTENT_INDEX + 10:
+            self._truncated = True
+            return
+
         self.ID = buf[base]
         self.level = buf[base + 1]
-        self.first = read_u16(buf, base + 2)
-        self.second = read_u16(buf, base + 4)
-        self.third = read_u16(buf, base + 6)
-        self.fourth = read_u16(buf, base + 8)
-        self.used = False
-        
+        v = read_u16(buf, base + 2)
+        if v is None:
+            self._truncated = True
+            return
+        self.first = v
+        v = read_u16(buf, base + 4)
+        self.second = 0 if v is None else v
+        v = read_u16(buf, base + 6)
+        self.third = 0 if v is None else v
+        v = read_u16(buf, base + 8)
+        self.fourth = 0 if v is None else v
+        if v is None:
+            self._truncated = True
+            return
+
         str_idx = base + 10
         if self.nameLength > 0:
-            self.name = buf[str_idx + 1:str_idx + 1 + self.nameLength].decode("utf-8", "ignore")
-        str_idx += 1 + self.nameLength
+            name_end = str_idx + 1 + self.nameLength
+            if name_end > len(buf):
+                self._truncated = True
+                self.nameLength = 0
+            else:
+                self.name = buf[str_idx + 1:name_end].decode("utf-8", "ignore")
+                str_idx = name_end
+        else:
+            str_idx += 1
         if self.contentLength > 0:
-            self.content = buf[str_idx + 1:str_idx + 1 + self.contentLength].decode("utf-8", "ignore")
+            content_end = str_idx + 1 + self.contentLength
+            if content_end > len(buf):
+                self._truncated = True
+                self.contentLength = 0
+            else:
+                self.content = buf[str_idx + 1:content_end].decode("utf-8", "ignore")
+
+    def _fill_keypoints(self, buf, fields):
+        base = CONTENT_INDEX + 12 + self.nameLength + self.contentLength
+        last = fields[-1][1] + 2
+        if self._truncated or base + last > len(buf):
+            for name, _ in fields:
+                setattr(self, name, 0)
+            self._truncated = True
+            return
+        for name, offset in fields:
+            v = read_u16(buf, base + offset)
+            if v is None:
+                self._truncated = True
+                setattr(self, name, 0)
+            else:
+                setattr(self, name, v)
 
 class FaceResult(Result):
     def __init__(self, buf):
@@ -242,9 +320,7 @@ class FaceResult(Result):
             ("lmouth_x", 12), ("lmouth_y", 14),
             ("rmouth_x", 16), ("rmouth_y", 18)
         ]
-        base = CONTENT_INDEX + 12 + self.nameLength + self.contentLength
-        for name, offset in FACE_FIELDS:
-            setattr(self, name, read_u16(buf, base + offset))
+        self._fill_keypoints(buf, FACE_FIELDS)
 
 class HandResult(Result):
     def __init__(self, buf):
@@ -277,9 +353,7 @@ class HandResult(Result):
             ("pinky_finger_dip_x", 76), ("pinky_finger_dip_y", 78),
             ("pinky_finger_tip_x", 80), ("pinky_finger_tip_y", 82),
         ]
-        base = CONTENT_INDEX + 12 + self.nameLength + self.contentLength
-        for name, offset in HAND_FIELDS:
-            setattr(self, name, read_u16(buf, base + offset))
+        self._fill_keypoints(buf, HAND_FIELDS)
 
 class PoseResult(Result):
     def __init__(self, buf):
@@ -306,13 +380,13 @@ class PoseResult(Result):
             ("lankle_x", 60), ("lankle_y", 62),
             ("rankle_x", 64), ("rankle_y", 66),
         ]
-        base =CONTENT_INDEX + 12 + self.nameLength + self.contentLength
-        for name, offset in POSE_FIELDS:
-            setattr(self, name, read_u16(buf, base + offset))
+        self._fill_keypoints(buf, POSE_FIELDS)
 
 class ProtocolV2(object):
     def __init__(self):
         self.ERROR_COUNT = 0x05
+        self.RETRY_COUNT = 10
+        self.RETRY_DELAY_S = 1
         self.FRAME_BUFFER_SIZE = 1024
         self.receive_index = HEADER_0_INDEX
         self.receive_buffer = bytearray(1024)
@@ -321,6 +395,8 @@ class ProtocolV2(object):
         self.customId = [None, None, None]
         self.result = {}
         self.send_buffer = bytearray(512)
+        self._last_drop = ""
+        self._wait_fail = ""
         for i in range(256):
             self.result[i] = {"algo": i, "info": None, "blocks": []}
 
@@ -336,14 +412,45 @@ class ProtocolV2(object):
         hex_cmd = [hex(x) for x in cmd]
         logging.debug(hex_cmd)
 
+    def _frame_brief(self, frame):
+        if not frame:
+            return ""
+        n = len(frame)
+        ff = sum(1 for b in frame if b == 0xFF)
+        head = [hex(x) for x in frame[:min(6, n)]]
+        return "len=%d header=%s ff_bytes=%d/%d" % (n, head, ff, n)
+
     def _log_dropped_frame(self, reason, frame=None, extra=""):
-        parts = ["dropped packet:", reason]
+        parts = [reason]
         if extra:
             parts.append(extra)
         if frame:
-            parts.append("len=%d" % len(frame))
-            parts.append("data=" + str([hex(x) for x in frame]))
-        logging.warning(" ".join(parts))
+            parts.append(self._frame_brief(frame))
+            if len(frame) > CONTENT_SIZE_INDEX:
+                parts.append("cmd=%s" % hex(frame[COMMAND_INDEX]))
+                parts.append("LEN=%s" % hex(frame[CONTENT_SIZE_INDEX]))
+                if (frame[COMMAND_INDEX] == COMMAND_RETURN_INFO
+                        and frame[CONTENT_SIZE_INDEX] != 10):
+                    parts.append("hint=INFO_LEN_not_10_possible_bit_error")
+        self._last_drop = " ".join(parts)
+        logging.debug("dropped packet: %s", self._last_drop)
+
+    def _describe_wait_fail(self, kind, expect_cmd):
+        parts = [
+            kind,
+            "expect_cmd=%s" % hex(expect_cmd),
+            "receive_index=%d" % self.receive_index,
+        ]
+        if kind == "unexpected command" and self.receive_index >= COMMAND_INDEX:
+            parts.append("got_cmd=%s" % hex(self.receive_buffer[COMMAND_INDEX]))
+            if self.receive_index >= CONTENT_SIZE_INDEX:
+                parts.append("LEN=%s" % hex(self.receive_buffer[CONTENT_SIZE_INDEX]))
+            parts.append(self._frame_brief(
+                self.receive_buffer[0:self.receive_index + 1]))
+        if self._last_drop:
+            parts.append("prior_drop=(%s)" % self._last_drop)
+        self._wait_fail = " ".join(parts)
+        return self._wait_fail
 
     def checksum(self, cmd):
         cs = 0
@@ -354,6 +461,13 @@ class ProtocolV2(object):
     def _flush_device_rx(self):
         self._clear_read_queue()
         self._reset_receive_state()
+
+    def _retry_after_read_fail(self, attempt):
+        """读失败后：未用尽次数则延时 1s、清缓存，准备重写命令。"""
+        if attempt + 1 >= self.RETRY_COUNT:
+            return
+        time.sleep(self.RETRY_DELAY_S)
+        self._flush_device_rx()
 
     def knock(self):
         # 初始化时清一次设备残留；后续写命令不再清
@@ -368,60 +482,82 @@ class ProtocolV2(object):
     def getResult(self, algo):
         self.husky_lens_protocol_write_begin(algo, COMMAND_GET_RESULT)
         self.husky_lens_protocol_write_end()
+        last_reason = ""
+        for attempt in range(self.RETRY_COUNT):
+            n = self._getResultOnce(algo)
+            if n is not None:
+                return n
+            last_reason = self._wait_fail or "getResult"
+            self._retry_after_read_fail(attempt)
+        logging.error(
+            "getResult failed after %d retries algo=%d %s",
+            self.RETRY_COUNT, algo, last_reason,
+        )
+        return None
 
-        ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_INFO)
+    def _getResultOnce(self, algo):
+        self._write_to_huskyLens()
+        ret, _, _ = self.wait(COMMAND_RETURN_INFO)
         if not ret:
-            self._log_dropped_frame("getResult RETURN_INFO failed", extra="algo=%d" % algo)
             return None
         if self.receive_index != CONTENT_INDEX + 10:
-            self._log_dropped_frame(
-                "getResult invalid RETURN_INFO length",
-                extra="algo=%d receive_index=%d expect=%d" % (
-                    algo, self.receive_index, CONTENT_INDEX + 10),
+            info_len = -1
+            if self.receive_index >= CONTENT_SIZE_INDEX:
+                info_len = self.receive_buffer[CONTENT_SIZE_INDEX]
+            self._wait_fail = (
+                "invalid RETURN_INFO length receive_index=%d LEN=%s"
+                % (self.receive_index, hex(info_len & 0xff) if info_len >= 0 else "n/a")
             )
             return None
-        
-        logging.debug(f"receive_index={self.receive_index}")
+
         self.result[algo]["info"] = Result(self.receive_buffer[0:self.receive_index+1])
-        self.result[algo]["info"].total_arrows = self.result[algo]["info"].total_results - self.result[algo]["info"].total_blocks
-        self.result[algo]["info"].total_arrows_learned = self.result[algo]["info"].total_results_learned - self.result[algo]["info"].total_blocks_learned
-        
+        self.result[algo]["info"].total_arrows = (
+            self.result[algo]["info"].total_results - self.result[algo]["info"].total_blocks
+        )
+        self.result[algo]["info"].total_arrows_learned = (
+            self.result[algo]["info"].total_results_learned
+            - self.result[algo]["info"].total_blocks_learned
+        )
         self.result[algo]["blocks"] = []
 
         for i in range(self.result[algo]["info"].total_blocks):
             ret, _, _ = self.wait(COMMAND_RETURN_BLOCK)
             if not ret:
-                self._log_dropped_frame(
-                    "getResult RETURN_BLOCK failed",
-                    extra="algo=%d block=%d/%d" % (
-                        algo, i, self.result[algo]["info"].total_blocks),
-                )
                 return None
             L = self.receive_buffer[CONTENT_SIZE_INDEX] + PROTOCOL_SIZE
+            frame = self.receive_buffer[0:L]
+            keypoint_bytes = 0
             if algo == ALGORITHM_FACE_RECOGNITION:
-                ret = FaceResult(self.receive_buffer[0:L])
+                keypoint_bytes = 20
             elif algo == ALGORITHM_POSE_RECOGNITION:
-                ret = PoseResult(self.receive_buffer[0:L])
+                keypoint_bytes = 68
             elif algo == ALGORITHM_HAND_RECOGNITION:
-                ret = HandResult(self.receive_buffer[0:L])
+                keypoint_bytes = 84
+            layout_err = validate_result_payload(frame, keypoint_bytes)
+            if layout_err:
+                self._wait_fail = "invalid BLOCK layout block=%d/%d %s" % (
+                    i, self.result[algo]["info"].total_blocks, layout_err)
+                return None
+            if algo == ALGORITHM_FACE_RECOGNITION:
+                parsed = FaceResult(frame)
+            elif algo == ALGORITHM_POSE_RECOGNITION:
+                parsed = PoseResult(frame)
+            elif algo == ALGORITHM_HAND_RECOGNITION:
+                parsed = HandResult(frame)
             else:
-                ret = Result(self.receive_buffer[0:L])
-            self.result[algo]["blocks"].append(ret)
+                parsed = Result(frame)
+            self.result[algo]["blocks"].append(parsed)
 
         for i in range(self.result[algo]["info"].total_arrows):
             ret, _, _ = self.wait(COMMAND_RETURN_ARROW)
             if not ret:
-                self._log_dropped_frame(
-                    "getResult RETURN_ARROW failed",
-                    extra="algo=%d arrow=%d/%d" % (
-                        algo, i, self.result[algo]["info"].total_arrows),
-                )
                 return None
             L = self.receive_buffer[CONTENT_SIZE_INDEX] + PROTOCOL_SIZE
             if algo == ALGORITHM_LINE_TRACKING:
-                ret = Result(self.receive_buffer[0:L])
-
-            self.result[algo]["blocks"].append(ret)
+                parsed = Result(self.receive_buffer[0:L])
+            else:
+                parsed = Result(self.receive_buffer[0:L])
+            self.result[algo]["blocks"].append(parsed)
         return self.result[algo]["info"].total_results
 
     def _clear_read_queue(self):
@@ -430,12 +566,12 @@ class ProtocolV2(object):
                 self.q.get()
 
     def wait(self, command):
+        self._last_drop = ""
+        self._wait_fail = ""
+        self._abort_wait = False
         receiving = True
         self.receive_buffer = bytearray(1024)
         self.receive_index = HEADER_0_INDEX
-        # 只清 I2C 队列；UART 仍按流读，下一帧可能已在队列里
-        if hasattr(self, "bus"):
-            self._clear_read_queue()
         start_ms = time.time_ns() // 1_000_000
         while receiving:
             now_ms = time.time_ns() // 1_000_000
@@ -446,21 +582,20 @@ class ProtocolV2(object):
                 time.sleep(0.01)
                 continue
             if self.husky_lens_protocol_receive(c):
-                receiving = False
-        if receiving:
-            self._log_dropped_frame(
-                "wait timeout 8s",
-                extra="expect_cmd=%s receive_index=%d" % (hex(command), self.receive_index),
-            )
+                if self.receive_buffer[COMMAND_INDEX] == command:
+                    receiving = False
+                else:
+                    # 旧帧（如等 0x1A 却先碰到 INFO/BLOCK），丢掉继续读，不重写
+                    self.receive_buffer = bytearray(1024)
+                    self.receive_index = HEADER_0_INDEX
+            elif self._abort_wait:
+                break
+        if self._abort_wait:
+            self._describe_wait_fail("bad frame", command)
             self._flush_device_rx()
             return False, [], []
-        if command != self.receive_buffer[COMMAND_INDEX]:
-            self._log_dropped_frame(
-                "unexpected command",
-                self.receive_buffer[0:self.receive_index + 1],
-                extra="expect_cmd=%s got_cmd=%s" % (
-                    hex(command), hex(self.receive_buffer[COMMAND_INDEX])),
-            )
+        if receiving:
+            self._describe_wait_fail("timeout 8s", command)
             self._flush_device_rx()
             return False, [], []
         retInt = []
@@ -537,6 +672,7 @@ class ProtocolV2(object):
             if data > max_content:
                 self._log_dropped_frame("invalid content size", extra="size=%d" % data)
                 self._reset_receive_state(data)
+                self._abort_wait = True
                 return False
             self.receive_buffer[CONTENT_SIZE_INDEX] = data
             self.receive_index = CONTENT_INDEX
@@ -545,6 +681,7 @@ class ProtocolV2(object):
         if self.receive_index >= self.FRAME_BUFFER_SIZE:
             self._log_dropped_frame("receive buffer overflow")
             self._reset_receive_state(data)
+            self._abort_wait = True
             return False
 
         self.receive_buffer[self.receive_index] = data
@@ -569,8 +706,8 @@ class ProtocolV2(object):
                         self.receive_index, calc_cs, recv_cs),
                 )
                 self._reset_receive_state(data)
+                self._abort_wait = True
                 return False
-            # 合法帧保留 receive_index 在校验和位置，getResult() 用它判断内容长度
             return True
 
         self.receive_index += 1
@@ -938,12 +1075,16 @@ class ProtocolV2(object):
         return ret
 
     def executeCommand(self, wait_cmd):
-        for _ in range(3):
+        for attempt in range(self.RETRY_COUNT):
             self._write_to_huskyLens()
             ret, retInt, retStr = self.wait(wait_cmd)
             if ret:
                 return ret, retInt, retStr
-        # 重试 3 次后仍未成功
+            self._retry_after_read_fail(attempt)
+        logging.error(
+            "command failed after %d retries expect_cmd=%s %s",
+            self.RETRY_COUNT, hex(wait_cmd), self._wait_fail,
+        )
         return False, [], []
 
 class HuskylensV2(ProtocolV2):
@@ -1074,7 +1215,7 @@ class HuskylensV2_I2C(HuskylensV2):
                 data = self._i2c_read_bytes(16)
             except Exception as e:
                 reason = "i2c_error"
-                logging.warning("flush rx I2C error: %s", e)
+                logging.error("flush rx I2C error: %s", e)
                 break
             if not data:
                 reason = "empty"
@@ -1091,12 +1232,6 @@ class HuskylensV2_I2C(HuskylensV2):
                 idle_reads = 0
         self._clear_read_queue()
         self._reset_receive_state()
-        elapsed_ms = time.time_ns() // 1_000_000 - start_ms
-        if saw_header or reason not in ("idle", "empty"):
-            logging.info(
-                "flush rx: %d ms, bytes=%d, leftover_header=%s, reason=%s",
-                elapsed_ms, flushed, saw_header, reason,
-            )
 
     def _write_to_huskyLens(self):
         self._connect = 0
@@ -1109,7 +1244,7 @@ class HuskylensV2_I2C(HuskylensV2):
                 time.sleep(0.05)
                 return
             except Exception as e:
-                logging.warning("I2C write failed (%d/%d): %s", self._connect + 1, self.ERROR_COUNT, e)
+                logging.error("I2C write failed (%d/%d): %s", self._connect + 1, self.ERROR_COUNT, e)
                 self._clear_read_queue()
                 self._reset_receive_state()
                 self._error_handling()
@@ -1180,7 +1315,7 @@ class HuskylensV2_UART(HuskylensV2):
                 time.sleep(0.1)
                 return
             except Exception as e:
-                logging.warning("UART write failed (%d/%d): %s", self._connect + 1, self.ERROR_COUNT, e)
+                logging.error("UART write failed (%d/%d): %s", self._connect + 1, self.ERROR_COUNT, e)
                 self._error_handling()
             if self._connect > self.ERROR_COUNT:
                 raise ValueError("Please check the huskylens connection or Reconnection sensor!!!")
