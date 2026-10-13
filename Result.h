@@ -135,12 +135,17 @@ typedef enum protocolCommand {
   COMMAND_ACTION_DRAW_UNIQUE_RECT = 0x2D,
   COMMAND_ACTION_START_RECORDING = 0x2E,
   COMMAND_ACTION_STOP_RECORDING = 0x2F,
-  // RFU 0x30 - 0x3F
 
+  #ifdef LARGE_MEMORY
   COMMAND_ACTION_E2E_START_RECORDING  = 0x30, 
   COMMAND_ACTION_E2E_STOP_RECORDING   = 0x31,
   COMMAND_ACTION_E2E_SEND_ANNOTATION   = 0x32,
-
+  COMMAND_ACTION_GET_AGENT_RESPONSE  = 0x33,
+  COMMAND_ACTION_SEND_AGENT_PROMPT   = 0x34,
+  COMMAND_ACTION_GET_AGENT_STATUS   = 0x35,
+  COMMAND_ACTION_IS_AGENT_RESPONSE_READY  = 0x36, 
+#endif
+  // RFU 0x37 - 0x3F
 } eProtocolCommand_t;
 
 typedef enum {
@@ -175,8 +180,22 @@ typedef enum {
   ALGORITHM_BUILTIN_COUNT,                // 28
 
   ALGORITHM_CUSTOM_BEGIN = 128, // 128
-
 } eAlgorithm_t;
+
+
+#ifdef LARGE_MEMORY
+typedef enum AgentType {
+  eXIAOZHI_AGENT = 0x0
+} eAgentType_t;
+
+typedef enum AgentStatus {
+  AGENT_QUERY_FAILED = -1,
+  AGENT_IDLE = 0x0,
+  AGENT_PROCESSING = 0x1,
+  AGENT_BROADCASTING = 0x2,
+} eAgentStatus_t;
+
+#endif
 
 #ifdef LARGE_MEMORY
 #define ALGORITHM_COUNT ALGORITHM_BUILTIN_COUNT
@@ -239,6 +258,7 @@ typedef struct __attribute__((packed)) {
     int8_t rfu1;
     int8_t level;
     int8_t mediaType;
+    int8_t agentType;
     int8_t retValue;
     int8_t lineWidth;
     int8_t confidence;
@@ -252,6 +272,8 @@ typedef struct __attribute__((packed)) {
     int16_t classID;
     int16_t total_results;
     int16_t pitch; // eular[0],沿Y轴移动，俯仰角,上下移动
+    int16_t fragmentCount;
+    
   };
   union {
     int16_t second;
@@ -259,6 +281,7 @@ typedef struct __attribute__((packed)) {
     int16_t yTarget;
     int16_t total_results_learned;
     int16_t yaw; // eular[1], 沿Z轴移动， 偏航角,左右移动
+    int16_t fragmentIndex;
   };
   union {
     int16_t third;

@@ -197,6 +197,8 @@ void ProtocolV2::protocolWrite(uint8_t *buffer, int length) {
         wire->beginTransmission(addr);
         wire->write(buffer + i * MAX_PL_LEN, MAX_PL_LEN);
         wire->endTransmission();
+
+        delay(5);
     }
     if(remain){
         wire->beginTransmission(addr);
@@ -221,7 +223,7 @@ bool ProtocolV2::protocolAvailable() {
   if (wire) {
     if (!wire->available()) {
       wire->setClock(100000);
-      wire->requestFrom(addr, 16);
+      wire->requestFrom((int)addr, 16);
     }
     while (wire->available()) {
       uint8_t result = wire->read();
@@ -1090,7 +1092,7 @@ bool ProtocolV2::stopRecording(eMediaType_t mediaType) {
   return ret;
 }
 
-
+#ifdef LARGE_MEMORY
 bool ProtocolV2::e2eStartRecording(void) {
   DBG("\n");
   bool ret = false;
@@ -1162,3 +1164,142 @@ bool ProtocolV2::e2eSendAnnotation(String annotation) {
   }
   return ret;
 }
+
+bool ProtocolV2::sendAgentPrompt(const String &prompt, eAgentType_t agentType) {
+  DBG("\n");
+  if (prompt.length() == 0) return false;
+
+  // 每片String最多 238 字节
+  // data_length 为单字节，整包数据不能超过 255
+  const uint16_t fragSize = 238;
+  uint8_t fragmentCount = (prompt.length() + fragSize - 1) / fragSize;
+  uint8_t fragmentIndex = 0;
+  bool ret = true;
+
+  while (fragmentIndex < fragmentCount) {
+    uint8_t *buffer = husky_lens_protocol_write_begin(
+      ALGORITHM_ANY, COMMAND_ACTION_SEND_AGENT_PROMPT);
+    husky_lens_protocol_write_uint8(0);
+    husky_lens_protocol_write_uint8(agentType);
+    husky_lens_protocol_write_int16(fragmentCount);
+    husky_lens_protocol_write_int16(fragmentIndex);
+    husky_lens_protocol_write_zero_bytes(4);
+    husky_lens_protocol_write_string(
+      prompt.substring((uint32_t)fragmentIndex * fragSize, (uint32_t)fragmentIndex * fragSize + fragSize));
+    int length = husky_lens_protocol_write_end();
+
+    bool fragmentOk = false;
+    for (int i = 0; i < retry; i++) {
+      protocolWrite(buffer, length);
+      if (wait(COMMAND_RETURN_ARGS)) {
+        PacketHead_t *head = (PacketHead_t *)receive_buffer;
+        PacketData_t *packet = (PacketData_t *)head->data;
+        if (packet->retValue == 0) {
+          fragmentOk = true;
+          break;
+        }
+      }
+    }
+    if (!fragmentOk) ret = false;
+    if (ret == false) break;
+    fragmentIndex++;
+  }
+  return ret;
+}
+
+eAgentStatus_t ProtocolV2::getAgentStatus(eAgentType_t agentType) {
+  DBG("\n");
+  uint8_t *buffer = husky_lens_protocol_write_begin(
+    ALGORITHM_ANY, COMMAND_ACTION_GET_AGENT_STATUS);
+  husky_lens_protocol_write_uint8(0);
+  husky_lens_protocol_write_uint8(agentType);
+  husky_lens_protocol_write_zero_bytes(8);
+  int length = husky_lens_protocol_write_end();
+
+  for (int i = 0; i < retry; i++) {
+    protocolWrite(buffer, length);
+    if (wait(COMMAND_RETURN_ARGS)) {
+      PacketHead_t *head = (PacketHead_t *)receive_buffer;
+      PacketData_t *packet = (PacketData_t *)head->data;
+
+      if (packet->retValue == 0) {
+        // protocol_hub 在 second 里带状态码（0=idle 1=processing 2=broadcasting）
+        int16_t code = packet->second;
+        if (code < AGENT_IDLE || code > AGENT_BROADCASTING) {
+          code = AGENT_IDLE; // 越界/旧版 protocol_hub 无此字段时兜底
+        }
+        return (eAgentStatus_t)code;
+      }
+      break;
+    }
+  }
+  return AGENT_QUERY_FAILED;
+}
+
+bool ProtocolV2::isAgentResponseReady(eAgentType_t agentType){
+  DBG("\n");
+  bool ret = false;
+  uint8_t *buffer = husky_lens_protocol_write_begin(
+    ALGORITHM_ANY, COMMAND_ACTION_IS_AGENT_RESPONSE_READY);
+    husky_lens_protocol_write_uint8(0);
+    husky_lens_protocol_write_uint8(agentType);
+    husky_lens_protocol_write_zero_bytes(8);
+    int length = husky_lens_protocol_write_end();
+
+  for (int i = 0; i < retry; i++) {
+    protocolWrite(buffer, length);
+    if (wait(COMMAND_RETURN_ARGS)) {
+      PacketHead_t *head = (PacketHead_t *)receive_buffer;
+      PacketData_t *packet = (PacketData_t *)head->data;
+
+      if (packet->retValue == 0) {
+        ret = true;
+      }
+      break;
+    }
+  }
+  return ret; 
+}
+
+String ProtocolV2::getAgentResponse(eAgentType_t agentType) {
+  DBG("\n");
+  String response;
+  PacketHead_t *head = (PacketHead_t *)receive_buffer;
+  PacketData_t *packet = (PacketData_t *)head->data;
+
+  int16_t expected = 0;       // 期望收到的下一片序号
+  int16_t fragmentCount = -1; // 由首片应答给出
+
+  while (true) {
+    uint8_t *buffer = husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_ACTION_GET_AGENT_RESPONSE);
+    husky_lens_protocol_write_uint8(0);
+    husky_lens_protocol_write_uint8(agentType);
+    husky_lens_protocol_write_zero_bytes(8);
+    int length = husky_lens_protocol_write_end();
+
+    // 请求帧不带序号，超时重试可能拿到重复片或导致对端推进；
+    // 靠应答里的 fragmentIndex 去重检漏，失败则整体失败，绝不返回半截结果
+    bool got = false;
+    for (int i = 0; i < retry; i++) {
+      protocolWrite(buffer, length);
+      if (wait(COMMAND_RETURN_ARGS)) {
+        got = true;
+        break;
+      }
+    }
+    if (!got) return "";                  // 通信失败
+    if (packet->retValue != 0) return ""; // 对端报错（如回答未就绪）
+
+    if (packet->fragmentIndex > expected) return ""; // 漏片，数据已不可信
+    if (packet->fragmentIndex == expected) {
+      String_t *value = (String_t *)packet->payload;
+      response += value->toString();
+      fragmentCount = packet->fragmentCount;
+      expected++;
+    }
+    // fragmentIndex < expected：重试造成的重复片，忽略
+
+    if (expected >= fragmentCount) return response; // 收齐全部
+  }
+}
+#endif

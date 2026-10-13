@@ -62,6 +62,14 @@ public:
   bool e2eStopRecording(void);
   bool e2eSendAnnotation(String annotation);
 
+  bool sendAgentPrompt(const String &prompt,eAgentType_t agentType=eXIAOZHI_AGENT);
+  // 失败时返回空字符串
+  String getAgentResponse(eAgentType_t agentType=eXIAOZHI_AGENT);
+  // 返回 AGENT_IDLE/AGENT_PROCESSING/AGENT_BROADCASTING，查询失败返回 AGENT_QUERY_FAILED
+  eAgentStatus_t getAgentStatus(eAgentType_t agentType=eXIAOZHI_AGENT);
+  bool isAgentResponseReady(eAgentType_t agentType=eXIAOZHI_AGENT);
+  
+
 public:
   int16_t maxID;
   int16_t total_results;
