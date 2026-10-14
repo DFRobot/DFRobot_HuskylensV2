@@ -89,7 +89,11 @@ void loop() {
   uint32_t start = millis();
   while (!huskylens.isAgentResponseReady()) {
     eAgentStatus_t status = huskylens.getAgentStatus();
-    if (status != AGENT_QUERY_FAILED) {
+    if(status == AGENT_DISABLED){
+      Serial.print(F("agent status: "));
+      Serial.println(agentStatusStr(status));
+      return;
+    }else if (status != AGENT_QUERY_FAILED) {
       Serial.print(F("agent status: "));
       Serial.println(agentStatusStr(status));
     } else {
@@ -113,7 +117,7 @@ void loop() {
   delay(5000);
 
 
-  if (!huskylens.sendAgentPrompt("打开闪光灯")) {
+  if (!huskylens.sendAgentPrompt("Turn on the flashlight")) {
     Serial.println("[AgentPrompt] Send prompt failed");
     delay(1000);
     return;
@@ -129,7 +133,11 @@ void loop() {
   start = millis();
   while (!huskylens.isAgentResponseReady()) {
     eAgentStatus_t status = huskylens.getAgentStatus();
-    if (status != AGENT_QUERY_FAILED) {
+    if (status == AGENT_DISABLED) {
+      Serial.print(F("agent status: "));
+      Serial.println(agentStatusStr(status));
+      return;
+    }else if (status != AGENT_QUERY_FAILED) {
       Serial.print(F("agent status: "));
       Serial.println(agentStatusStr(status));
     } else {
@@ -154,7 +162,7 @@ void loop() {
 
 
 
-  if (!huskylens.sendAgentPrompt("关闭闪光灯")) {
+  if (!huskylens.sendAgentPrompt("Turn off the flashlight")) {
     Serial.println("[AgentPrompt] Send prompt failed");
     delay(1000);
     return;
