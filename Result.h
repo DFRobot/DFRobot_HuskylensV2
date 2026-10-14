@@ -193,6 +193,7 @@ typedef enum AgentStatus {
   AGENT_IDLE = 0x0,
   AGENT_PROCESSING = 0x1,
   AGENT_BROADCASTING = 0x2,
+  AGENT_DISABLED = 0x3,
 } eAgentStatus_t;
 
 #endif

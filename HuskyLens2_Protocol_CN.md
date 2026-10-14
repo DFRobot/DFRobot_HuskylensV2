@@ -3,6 +3,7 @@
 | :--: | :----: | :--: | :----: | :----: |
 | V0.1 | 2025-11-07  | 王辉  | ouki.wang@dfrobot.com | 初始版本 |
 | V0.2 | 2025-11-26 | 王辉  | ouki.wang@dfrobot.com | 1. 添加获取读写算法参数api<br/>2.  删除RETURN_OK，统一使用RETURN_ARGS<br/>3.  修改命令号，算法号<br/> 4.  将设置矩形的x1 y1 x2 y2改为x y widht height<br/> |
+| V0.3 | 2026-10-13 | thdyyl | yuanlong.yu@dfrobot.com | 添加智能体（Agent）命令：GET_AGENT_RESPONSE(0x33)、SEND_AGENT_PROMPT(0x34)、GET_AGENT_STATUS(0x35)、IS_AGENT_RESPONSE_READY(0x36) |
 
 ## 通用命令/响应
 | Head55 | HeadAA  | CMD  | Data Length | Data | Checksum |
@@ -534,6 +535,106 @@ Data
 |   2    |   8    |                              0                               |
 
 返回命令：RETURN_ARGS，其中retValue=0表示执行成功，其他值表示执行失败，附带文件名或错误信息
+
+## 33. GET_AGENT_RESPONSE(0x33)
+
+获取智能体（Agent）的回答内容。回答较长时设备按分片返回：主机循环发送本命令，设备按序推进分片，应答中携带 fragmentCount 和 fragmentIndex，主机据此去重检漏，收齐全部 fragmentCount 个分片后拼接得到完整回答。
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x33 |    0    |     10      | 10 bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType（0：小智Agent） |
+| 2 | 8 | RFU |
+
+返回命令：RETURN_ARGS
+
+应答 Data 段
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU |
+| 1 | 1 | retValue：0 表示成功，其他值表示失败（如回答未就绪） |
+| 2 | 2 | fragmentCount（回答总分片数） |
+| 4 | 2 | fragmentIndex（当前分片序号，从 0 开始） |
+| 6 | 4 | RFU |
+| 10 | 1 | 回答分片 length |
+| 11 | n | 回答分片内容（UTF-8） |
+
+## 34. SEND_AGENT_PROMPT(0x34)
+
+向智能体（Agent）发送提示词。提示词按 UTF-8 字节流分片发送，Data Length 为单字节，整包数据段不能超过 255 字节，因此每片内容最多 244 字节（参考实现使用 238 字节）。分片序号从 0 开始，设备收齐 fragmentCount 个分片后开始处理。
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x34 |    0    |   10+1+n    | 10+1+n bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType（0：小智Agent） |
+| 2 | 2 | fragmentCount（总分片数） |
+| 4 | 2 | fragmentIndex（当前分片序号，从 0 开始） |
+| 6 | 4 | RFU |
+| 10 | 1 | 提示词分片 length |
+| 11 | n | 提示词分片内容（UTF-8） |
+
+返回命令：RETURN_ARGS retValue=0 表示本分片接收成功，其他值表示失败
+
+## 35. GET_AGENT_STATUS(0x35)
+
+查询智能体（Agent）当前状态。
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x35 |    0    |     10      | 10 bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType（0：小智Agent） |
+| 2 | 8 | RFU |
+
+返回命令：RETURN_ARGS
+
+应答 Data 段
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU |
+| 1 | 1 | retValue：0 表示查询成功，其他值表示失败 |
+| 2 | 2 | RFU |
+| 4 | 2 | 状态码：0=idle（空闲）<br/>1=processing（处理中）<br/>2=broadcasting（播报中）<br/>3=disabled（小智开关未打开）<br/> |
+| 6 | 4 | RFU |
+
+注：旧版固件的应答中可能不包含状态码字段，此时主机应按 idle 处理。
+
+## 36. IS_AGENT_RESPONSE_READY(0x36)
+
+查询智能体（Agent）的回答是否已就绪。
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x36 |    0    |     10      | 10 bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType（0：小智Agent） |
+| 2 | 8 | RFU |
+
+返回命令：RETURN_ARGS retValue=0 表示回答已就绪，可通过 GET_AGENT_RESPONSE 获取；其他值表示尚未就绪
 
 # 私有数据
 

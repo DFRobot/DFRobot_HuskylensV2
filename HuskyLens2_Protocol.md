@@ -3,6 +3,7 @@
 | :--: | :----: | :--: | :----: | :----: |
 | V0.1 | 2025-11-07  | ouki.wang  | ouki.wang@dfrobot.com | First version |
 | V0.2 | 2025-11-26 | ouki.wang  | ouki.wang@dfrobot.com | 1. Add API for retrieving read/write algorithm parameters<br/>2. Remove RETURN_OK and uniformly use RETURN_ARGS<br/>3. Modify command numbers and algorithm numbers<br/>4. Change rectangle setting from x1 y1 x2 y2 to x y width height |
+| V0.3 | 2026-10-13 | thdyyl | yuanlong.yu@dfrobot.com | Add agent commands: GET_AGENT_RESPONSE(0x33), SEND_AGENT_PROMPT(0x34), GET_AGENT_STATUS(0x35), IS_AGENT_RESPONSE_READY(0x36) |
 
 ## General Command/Response
 | Head55 | HeadAA  | CMD  | Data Length | Data | Checksum |
@@ -518,6 +519,106 @@ Data
 Return command: RETURN_ARGS retValue=0 indicates successful execution, other values indicate execution failure, with attached file name or error information
 
 
+
+## 33. GET_AGENT_RESPONSE(0x33)
+
+Get the agent's response. A long response is returned in fragments: the host sends this command repeatedly and the device advances through the fragments in order. Each response carries fragmentCount and fragmentIndex, which the host uses to detect duplicated or missing fragments. The full response is obtained by concatenating all fragmentCount fragments.
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x33 |    0    |     10      | 10 bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType (0: xiaozhi agent) |
+| 2 | 8 | RFU |
+
+Return command: RETURN_ARGS
+
+Response Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU |
+| 1 | 1 | retValue: 0 indicates success, other values indicate failure (e.g. response not ready) |
+| 2 | 2 | fragmentCount (total number of fragments) |
+| 4 | 2 | fragmentIndex (current fragment index, starting from 0) |
+| 6 | 4 | RFU |
+| 10 | 1 | response fragment length |
+| 11 | n | response fragment content (UTF-8) |
+
+## 34. SEND_AGENT_PROMPT(0x34)
+
+Send a prompt to the agent. The prompt is sent as a UTF-8 byte stream in fragments. Data Length is a single byte and the whole Data field must not exceed 255 bytes, so each fragment carries at most 244 bytes of content (the reference implementation uses 238 bytes). fragmentIndex starts from 0, and the device starts processing once all fragmentCount fragments have been received.
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x34 |    0    |   10+1+n    | 10+1+n bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType (0: xiaozhi agent) |
+| 2 | 2 | fragmentCount (total number of fragments) |
+| 4 | 2 | fragmentIndex (current fragment index, starting from 0) |
+| 6 | 4 | RFU |
+| 10 | 1 | prompt fragment length |
+| 11 | n | prompt fragment content (UTF-8) |
+
+Return command: RETURN_ARGS retValue=0 indicates the fragment was received successfully, other values indicate failure
+
+## 35. GET_AGENT_STATUS(0x35)
+
+Query the current status of the agent.
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x35 |    0    |     10      | 10 bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType (0: xiaozhi agent) |
+| 2 | 8 | RFU |
+
+Return command: RETURN_ARGS
+
+Response Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU |
+| 1 | 1 | retValue: 0 indicates the query succeeded, other values indicate failure |
+| 2 | 2 | RFU |
+| 4 | 2 | status code: 0=idle<br/>1=processing<br/>2=broadcasting<br/>3=disabled (xiaozhi switch is off)<br/> |
+| 6 | 4 | RFU |
+
+Note: older firmware may not include the status code field in the response; the host should treat this case as idle.
+
+## 36. IS_AGENT_RESPONSE_READY(0x36)
+
+Query whether the agent's response is ready.
+
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
+|  0x55  |  0xAA  | 0x36 |    0    |     10      | 10 bytes |  1 byte  |
+
+Data
+
+| offset | length | name |
+| :----: | :----: | :--: |
+| 0 | 1 | RFU0 |
+| 1 | 1 | agentType (0: xiaozhi agent) |
+| 2 | 8 | RFU |
+
+Return command: RETURN_ARGS retValue=0 indicates the response is ready and can be fetched with GET_AGENT_RESPONSE; other values indicate it is not ready yet
 
 # Private data
 

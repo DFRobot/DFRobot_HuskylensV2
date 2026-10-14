@@ -1223,9 +1223,10 @@ eAgentStatus_t ProtocolV2::getAgentStatus(eAgentType_t agentType) {
       PacketData_t *packet = (PacketData_t *)head->data;
 
       if (packet->retValue == 0) {
-        // protocol_hub 在 second 里带状态码（0=idle 1=processing 2=broadcasting）
+        // protocol_hub 在 second 里带状态码
+        // （0=idle 1=processing 2=broadcasting 3=小智开关未打开）
         int16_t code = packet->second;
-        if (code < AGENT_IDLE || code > AGENT_BROADCASTING) {
+        if (code < AGENT_IDLE || code > AGENT_DISABLED) {
           code = AGENT_IDLE; // 越界/旧版 protocol_hub 无此字段时兜底
         }
         return (eAgentStatus_t)code;

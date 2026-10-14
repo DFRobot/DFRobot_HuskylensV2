@@ -63,9 +63,9 @@ public:
   bool e2eSendAnnotation(String annotation);
 
   bool sendAgentPrompt(const String &prompt,eAgentType_t agentType=eXIAOZHI_AGENT);
-  // 失败时返回空字符串
+  // Return an empty string on failure.
   String getAgentResponse(eAgentType_t agentType=eXIAOZHI_AGENT);
-  // 返回 AGENT_IDLE/AGENT_PROCESSING/AGENT_BROADCASTING，查询失败返回 AGENT_QUERY_FAILED
+  // return AGENT_IDLE/AGENT_PROCESSING/AGENT_BROADCASTING/AGENT_DISABLED on success, or AGENT_QUERY_FAILED.
   eAgentStatus_t getAgentStatus(eAgentType_t agentType=eXIAOZHI_AGENT);
   bool isAgentResponseReady(eAgentType_t agentType=eXIAOZHI_AGENT);
   

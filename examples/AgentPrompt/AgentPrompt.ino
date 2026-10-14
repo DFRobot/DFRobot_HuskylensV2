@@ -27,9 +27,26 @@
 
 HuskylensV2 huskylens;
 
-// 轮询总超时：云端生成长回答可能需要数十秒，超时后放弃本轮，避免死循环
+// Total polling timeout: the cloud may take tens of seconds to generate a
+// long answer; give up this round on timeout to avoid an endless loop
 #define AGENT_POLL_TIMEOUT_MS 90000
 #define AGENT_POLL_INTERVAL_MS 500
+
+
+// Convert the enum status to a readable string for serial monitoring
+static const char *agentStatusStr(eAgentStatus_t status) {
+  switch (status) {
+  case AGENT_PROCESSING:
+    return "processing";   // Submitted, waiting for the cloud to generate
+  case AGENT_BROADCASTING:
+    return "broadcasting"; // Broadcasting the answer
+  case AGENT_DISABLED:
+    return "disabled";     // The agent switch is not turned on
+  case AGENT_IDLE:
+  default:
+    return "idle";
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -44,18 +61,6 @@ void setup() {
   }
 }
 
-// 把枚举状态转成可读字符串，便于串口观察
-static const char *agentStatusStr(eAgentStatus_t status) {
-  switch (status) {
-  case AGENT_PROCESSING:
-    return "processing";   // 已提交，等待云端生成
-  case AGENT_BROADCASTING:
-    return "broadcasting"; // 正在播报回答
-  case AGENT_IDLE:
-  default:
-    return "idle";
-  }
-}
 
 void loop() {
   Serial.println();
@@ -63,15 +68,24 @@ void loop() {
 
   if (!huskylens.sendAgentPrompt("tell me a long joke")) {
     Serial.println("[AgentPrompt] Send prompt failed");
+    eAgentStatus_t status = huskylens.getAgentStatus();
+    if (status != AGENT_QUERY_FAILED) {
+      Serial.print(F("agent status: "));
+      Serial.println(agentStatusStr(status));
+    } else {
+      Serial.println(F("agent status: <query failed>"));
+    }
     delay(1000);
     return;
   }
 
-  // 等设备开始处理后再查就绪标志：刚发完 prompt 时 agent 尚未进入
-  // processing，可能读到上一轮遗留的 ready 状态，导致跳过轮询直接取回答
+  // Wait for the device to start processing before checking the ready flag:
+  // right after sending a prompt the agent has not entered processing yet,
+  // so a stale ready state from the previous round may be read, which would
+  // skip polling and fetch the answer immediately
   delay(2000);
 
-  // 轮询直到回答就绪或总超时
+  // Poll until the answer is ready or the total timeout expires
   uint32_t start = millis();
   while (!huskylens.isAgentResponseReady()) {
     eAgentStatus_t status = huskylens.getAgentStatus();
@@ -105,11 +119,13 @@ void loop() {
     return;
   }
 
-  // 等设备开始处理后再查就绪标志：刚发完 prompt 时 agent 尚未进入
-  // processing，可能读到上一轮遗留的 ready 状态，导致跳过轮询直接取回答
+  // Wait for the device to start processing before checking the ready flag:
+  // right after sending a prompt the agent has not entered processing yet,
+  // so a stale ready state from the previous round may be read, which would
+  // skip polling and fetch the answer immediately
   delay(2000);
 
-  // 轮询直到回答就绪或总超时
+  // Poll until the answer is ready or the total timeout expires
   start = millis();
   while (!huskylens.isAgentResponseReady()) {
     eAgentStatus_t status = huskylens.getAgentStatus();
@@ -144,11 +160,13 @@ void loop() {
     return;
   }
 
-  // 等设备开始处理后再查就绪标志：刚发完 prompt 时 agent 尚未进入
-  // processing，可能读到上一轮遗留的 ready 状态，导致跳过轮询直接取回答
+  // Wait for the device to start processing before checking the ready flag:
+  // right after sending a prompt the agent has not entered processing yet,
+  // so a stale ready state from the previous round may be read, which would
+  // skip polling and fetch the answer immediately
   delay(2000);
 
-  // 轮询直到回答就绪或总超时
+  // Poll until the answer is ready or the total timeout expires
   start = millis();
   while (!huskylens.isAgentResponseReady()) {
     eAgentStatus_t status = huskylens.getAgentStatus();
