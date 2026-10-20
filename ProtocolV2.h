@@ -61,14 +61,14 @@ public:
   bool e2eStartRecording(void);
   bool e2eStopRecording(void);
   bool e2eSendAnnotation(String annotation);
-
+#ifdef LARGE_MEMORY
   bool sendAgentPrompt(const String &prompt,eAgentType_t agentType=eXIAOZHI_AGENT);
   // Return an empty string on failure.
   String getAgentResponse(eAgentType_t agentType=eXIAOZHI_AGENT);
   // return AGENT_IDLE/AGENT_PROCESSING/AGENT_BROADCASTING/AGENT_DISABLED on success, or AGENT_QUERY_FAILED.
   eAgentStatus_t getAgentStatus(eAgentType_t agentType=eXIAOZHI_AGENT);
   bool isAgentResponseReady(eAgentType_t agentType=eXIAOZHI_AGENT);
-  
+#endif
 
 public:
   int16_t maxID;

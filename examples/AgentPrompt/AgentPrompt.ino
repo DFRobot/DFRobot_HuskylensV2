@@ -61,22 +61,11 @@ void setup() {
   }
 }
 
-
-void loop() {
-  Serial.println();
-  Serial.println("[AgentPrompt] Start ...");
-
-  if (!huskylens.sendAgentPrompt("tell me a long joke")) {
+// Send one prompt and print the whole answer, return false on any failure
+static bool runAgentRound(const String &prompt) {
+  if (!huskylens.sendAgentPrompt(prompt)) {
     Serial.println("[AgentPrompt] Send prompt failed");
-    eAgentStatus_t status = huskylens.getAgentStatus();
-    if (status != AGENT_QUERY_FAILED) {
-      Serial.print(F("agent status: "));
-      Serial.println(agentStatusStr(status));
-    } else {
-      Serial.println(F("agent status: <query failed>"));
-    }
-    delay(1000);
-    return;
+    return false;
   }
 
   // Wait for the device to start processing before checking the ready flag:
@@ -89,116 +78,43 @@ void loop() {
   uint32_t start = millis();
   while (!huskylens.isAgentResponseReady()) {
     eAgentStatus_t status = huskylens.getAgentStatus();
-    if(status == AGENT_DISABLED){
-      Serial.print(F("agent status: "));
-      Serial.println(agentStatusStr(status));
-      return;
-    }else if (status != AGENT_QUERY_FAILED) {
-      Serial.print(F("agent status: "));
-      Serial.println(agentStatusStr(status));
-    } else {
-      Serial.println(F("agent status: <query failed>"));
-    }
-    if (millis() - start > AGENT_POLL_TIMEOUT_MS) {
-      Serial.println("[AgentPrompt] Poll timeout, give up");
-      delay(1000);
-      return;
-    }
-    delay(AGENT_POLL_INTERVAL_MS);
-  }
-
-  String response;
-  response = huskylens.getAgentResponse();
-  if (response.length() > 0) {
-    Serial.println("[AgentPrompt] Response : " + response);
-  } else {
-    Serial.println("[AgentPrompt] Response failed");
-  }
-  delay(5000);
-
-
-  if (!huskylens.sendAgentPrompt("Turn on the flashlight")) {
-    Serial.println("[AgentPrompt] Send prompt failed");
-    delay(1000);
-    return;
-  }
-
-  // Wait for the device to start processing before checking the ready flag:
-  // right after sending a prompt the agent has not entered processing yet,
-  // so a stale ready state from the previous round may be read, which would
-  // skip polling and fetch the answer immediately
-  delay(2000);
-
-  // Poll until the answer is ready or the total timeout expires
-  start = millis();
-  while (!huskylens.isAgentResponseReady()) {
-    eAgentStatus_t status = huskylens.getAgentStatus();
     if (status == AGENT_DISABLED) {
       Serial.print(F("agent status: "));
       Serial.println(agentStatusStr(status));
-      return;
-    }else if (status != AGENT_QUERY_FAILED) {
+      return false;
+    } else if (status != AGENT_QUERY_FAILED) {
       Serial.print(F("agent status: "));
       Serial.println(agentStatusStr(status));
     } else {
       Serial.println(F("agent status: <query failed>"));
+      return false;
     }
     if (millis() - start > AGENT_POLL_TIMEOUT_MS) {
       Serial.println("[AgentPrompt] Poll timeout, give up");
-      delay(1000);
-      return;
+      return false;
     }
     delay(AGENT_POLL_INTERVAL_MS);
   }
 
-
-  response = huskylens.getAgentResponse();
+  String response = huskylens.getAgentResponse();
   if (response.length() > 0) {
     Serial.println("[AgentPrompt] Response : " + response);
-  } else {
-    Serial.println("[AgentPrompt] Response failed");
+    return true;
   }
+  Serial.println("[AgentPrompt] Response failed");
+  return false;
+}
+
+void loop() {
+  Serial.println();
+  Serial.println("[AgentPrompt] Start ...");
+
+  runAgentRound("tell me a long joke");
   delay(5000);
 
-
-
-  if (!huskylens.sendAgentPrompt("Turn off the flashlight")) {
-    Serial.println("[AgentPrompt] Send prompt failed");
-    delay(1000);
-    return;
-  }
-
-  // Wait for the device to start processing before checking the ready flag:
-  // right after sending a prompt the agent has not entered processing yet,
-  // so a stale ready state from the previous round may be read, which would
-  // skip polling and fetch the answer immediately
-  delay(2000);
-
-  // Poll until the answer is ready or the total timeout expires
-  start = millis();
-  while (!huskylens.isAgentResponseReady()) {
-    eAgentStatus_t status = huskylens.getAgentStatus();
-    if (status != AGENT_QUERY_FAILED) {
-      Serial.print(F("agent status: "));
-      Serial.println(agentStatusStr(status));
-    } else {
-      Serial.println(F("agent status: <query failed>"));
-    }
-    if (millis() - start > AGENT_POLL_TIMEOUT_MS) {
-      Serial.println("[AgentPrompt] Poll timeout, give up");
-      delay(1000);
-      return;
-    }
-    delay(AGENT_POLL_INTERVAL_MS);
-  }
-
-
-  response = huskylens.getAgentResponse();
-  if (response.length() > 0) {
-    Serial.println("[AgentPrompt] Response : " + response);
-  } else {
-    Serial.println("[AgentPrompt] Response failed");
-  }
+  runAgentRound("Turn on the flashlight");
   delay(5000);
 
+  runAgentRound("Turn off the flashlight");
+  delay(5000);
 }
