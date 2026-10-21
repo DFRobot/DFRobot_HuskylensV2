@@ -1,4 +1,8 @@
-#include "xiaozhi_text_check.h"
+#include "XiaozhiTextCheck.h"
+
+#if !defined(ARDUINO) || defined(LARGE_MEMORY)
+
+#include <cstring>
 
 namespace xiaozhi {
 
@@ -50,39 +54,42 @@ bool is_cjk_punct(uint32_t cp) {
   }
 }
 
-// 解码 s[i] 处的一个 UTF-8 序列。
+// 解码 data[i] 处的一个 UTF-8 序列。
 // 合法: 返回码点并把 i 前移整个序列; 非法(截断/坏续字节/过长编码/代理区/
 // 超出 U+10FFFF): 返回 kInvalidCp 且 i 仅前移 1 字节 —— 该字节按"重型
 // 非ASCII"兜底(保守方向)。
-uint32_t decode_one(const std::string &s, size_t &i) {
-  const size_t n = s.size();
-  const unsigned char c0 = static_cast<unsigned char>(s[i]);
+uint32_t decode_one(const char *data, size_t n, size_t &i) {
+  const unsigned char c0 = static_cast<unsigned char>(data[i]);
   if (c0 < 0x80) { // 1 字节 0xxxxxxx
     ++i;
     return c0;
   }
-  if ((c0 & 0xE0) == 0xC0 && i + 1 < n && is_continuation(s[i + 1])) {
+  if ((c0 & 0xE0) == 0xC0 && i + 1 < n &&
+      is_continuation(static_cast<unsigned char>(data[i + 1]))) {
     uint32_t cp = (static_cast<uint32_t>(c0 & 0x1F) << 6) |
-                  (static_cast<unsigned char>(s[i + 1]) & 0x3F);
+                  (static_cast<unsigned char>(data[i + 1]) & 0x3F);
     if (cp >= 0x80) { // 拒绝过长编码
       i += 2;
       return cp;
     }
-  } else if ((c0 & 0xF0) == 0xE0 && i + 2 < n && is_continuation(s[i + 1]) &&
-             is_continuation(s[i + 2])) {
+  } else if ((c0 & 0xF0) == 0xE0 && i + 2 < n &&
+             is_continuation(static_cast<unsigned char>(data[i + 1])) &&
+             is_continuation(static_cast<unsigned char>(data[i + 2]))) {
     uint32_t cp = (static_cast<uint32_t>(c0 & 0x0F) << 12) |
-                  ((static_cast<uint32_t>(static_cast<unsigned char>(s[i + 1])) & 0x3F) << 6) |
-                  (static_cast<unsigned char>(s[i + 2]) & 0x3F);
+                  ((static_cast<uint32_t>(static_cast<unsigned char>(data[i + 1])) & 0x3F) << 6) |
+                  (static_cast<unsigned char>(data[i + 2]) & 0x3F);
     if (cp >= 0x800 && !(cp >= 0xD800 && cp <= 0xDFFF)) { // 拒绝过长/代理区
       i += 3;
       return cp;
     }
-  } else if ((c0 & 0xF8) == 0xF0 && i + 3 < n && is_continuation(s[i + 1]) &&
-             is_continuation(s[i + 2]) && is_continuation(s[i + 3])) {
+  } else if ((c0 & 0xF8) == 0xF0 && i + 3 < n &&
+             is_continuation(static_cast<unsigned char>(data[i + 1])) &&
+             is_continuation(static_cast<unsigned char>(data[i + 2])) &&
+             is_continuation(static_cast<unsigned char>(data[i + 3]))) {
     uint32_t cp = (static_cast<uint32_t>(c0 & 0x07) << 18) |
-                  ((static_cast<uint32_t>(static_cast<unsigned char>(s[i + 1])) & 0x3F) << 12) |
-                  ((static_cast<uint32_t>(static_cast<unsigned char>(s[i + 2])) & 0x3F) << 6) |
-                  (static_cast<unsigned char>(s[i + 3]) & 0x3F);
+                  ((static_cast<uint32_t>(static_cast<unsigned char>(data[i + 1])) & 0x3F) << 12) |
+                  ((static_cast<uint32_t>(static_cast<unsigned char>(data[i + 2])) & 0x3F) << 6) |
+                  (static_cast<unsigned char>(data[i + 3]) & 0x3F);
     if (cp >= 0x10000 && cp <= 0x10FFFF) { // 拒绝过长/超范围
       i += 4;
       return cp;
@@ -112,12 +119,60 @@ CharClass classify(uint32_t cp) {
   return CharClass::Heavy; // emoji/全角/韩文/俄文/拉丁扩展/符号等
 }
 
+// 判定规则的唯一实现: 纯整数运算, 不触碰 std::string。
+// 部分嵌入式工具链(如 micro:bit 的 sandeepmistry nRF5 core)用 gcc 驱动
+// 链接且不带 -lstdc++, Arduino 构建下本文件不编译任何 std::string 代码,
+// 从结构上保证链接不受 gc-sections 有效性影响。
+bool rules_pass(const MeasureResult &m) {
+  if (m.zh_eff > MAX_CJK)
+    return false;
+  if (m.cjk_punct >= 3 && m.hanzi >= 14)
+    return false;
+  if (m.cjk_punct >= 2 && m.hanzi >= 15)
+    return false;
+  if (m.en_eff == 0)
+    return true;
+  if (m.zh_eff == 0)
+    return m.en_eff <= MAX_ASCII;
+  int budget = MIXED_BUDGET[m.zh_eff];
+  if (m.heavy > 0)
+    budget -= 1; // 重型非ASCII混用, 预算保守减1
+  return m.en_eff <= budget;
+}
+
+#if !defined(ARDUINO)
+
 std::string detail_str(const MeasureResult &m) {
   return "zh=" + std::to_string(m.zh_eff) + "(汉字" + std::to_string(m.hanzi) +
          "+重型" + std::to_string(m.heavy) + ") en=" + std::to_string(m.en_eff) +
          "(字母" + std::to_string(m.letter) + "+数字" + std::to_string(m.digit) +
          "+句号" + std::to_string(m.period) + "+标点" + std::to_string(m.punct) +
          ")";
+}
+
+// 与 rules_pass 同序遍历, 仅用于生成诊断文案(结论一律以 rules_pass 为准)
+std::string explain(const MeasureResult &m) {
+  if (m.zh_eff > MAX_CJK)
+    return "zh 超过 " + std::to_string(MAX_CJK) + ", 确定被拒";
+  if (m.cjk_punct >= 3 && m.hanzi >= 14)
+    return "中文标点>=3且汉字类>=14, 保守拒绝";
+  if (m.cjk_punct >= 2 && m.hanzi >= 15)
+    return "中文标点>=2且汉字类>=15, 保守拒绝";
+  if (m.en_eff == 0)
+    return "纯非ASCII <= " + std::to_string(MAX_CJK);
+  if (m.zh_eff == 0) {
+    if (m.en_eff <= MAX_ASCII)
+      return "纯ASCII <= " + std::to_string(MAX_ASCII);
+    return "纯ASCII 超过 " + std::to_string(MAX_ASCII) + ", 确定被拒";
+  }
+  int budget = MIXED_BUDGET[m.zh_eff];
+  if (m.heavy > 0)
+    budget -= 1;
+  if (m.en_eff <= budget)
+    return "混合预算 zh=" + std::to_string(m.zh_eff) +
+           " -> en<=" + std::to_string(budget);
+  return "超出混合预算 zh=" + std::to_string(m.zh_eff) +
+         " -> en<=" + std::to_string(budget) + ", 确定被拒";
 }
 
 CheckResult verdict(const MeasureResult &m, bool ok, const std::string &why) {
@@ -128,13 +183,15 @@ CheckResult verdict(const MeasureResult &m, bool ok, const std::string &why) {
   return r;
 }
 
+#endif // !defined(ARDUINO)
+
 } // namespace
 
-MeasureResult measure(const std::string &utf8_text) {
+MeasureResult measure(const char *utf8_text, size_t length) {
   MeasureResult r = {};
   size_t i = 0;
-  while (i < utf8_text.size()) {
-    uint32_t cp = decode_one(utf8_text, i);
+  while (i < length) {
+    uint32_t cp = decode_one(utf8_text, length, i);
     CharClass cls = (cp == kInvalidCp) ? CharClass::Heavy : classify(cp);
     switch (cls) {
     case CharClass::Hanzi:
@@ -167,35 +224,39 @@ MeasureResult measure(const std::string &utf8_text) {
   return r;
 }
 
+#if !defined(ARDUINO)
+
+MeasureResult measure(const std::string &utf8_text) {
+  return measure(utf8_text.data(), utf8_text.size());
+}
+
 CheckResult check_text(const std::string &utf8_text) {
   MeasureResult m = measure(utf8_text);
-
-  if (m.zh_eff > MAX_CJK)
-    return verdict(m, false, "zh 超过 " + std::to_string(MAX_CJK) + ", 确定被拒");
-  if (m.cjk_punct >= 3 && m.hanzi >= 14)
-    return verdict(m, false, "中文标点>=3且汉字类>=14, 保守拒绝");
-  if (m.cjk_punct >= 2 && m.hanzi >= 15)
-    return verdict(m, false, "中文标点>=2且汉字类>=15, 保守拒绝");
-  if (m.en_eff == 0)
-    return verdict(m, true, "纯非ASCII <= " + std::to_string(MAX_CJK));
-  if (m.zh_eff == 0) {
-    if (m.en_eff <= MAX_ASCII)
-      return verdict(m, true, "纯ASCII <= " + std::to_string(MAX_ASCII));
-    return verdict(m, false,
-                   "纯ASCII 超过 " + std::to_string(MAX_ASCII) + ", 确定被拒");
-  }
-  int budget = MIXED_BUDGET[m.zh_eff];
-  if (m.heavy > 0)
-    budget -= 1; // 重型非ASCII混用, 预算保守减1
-  if (m.en_eff <= budget)
-    return verdict(m, true, "混合预算 zh=" + std::to_string(m.zh_eff) +
-                                " -> en<=" + std::to_string(budget));
-  return verdict(m, false, "超出混合预算 zh=" + std::to_string(m.zh_eff) +
-                               " -> en<=" + std::to_string(budget) + ", 确定被拒");
+  return verdict(m, rules_pass(m), explain(m));
 }
+
+#endif // !defined(ARDUINO)
+
+bool can_send(const char *utf8_text, size_t length) {
+  if (utf8_text == NULL)
+    return false;
+  return rules_pass(measure(utf8_text, length));
+}
+
+bool can_send(const char *utf8_text) {
+  if (utf8_text == NULL)
+    return false;
+  return can_send(utf8_text, strlen(utf8_text));
+}
+
+#if !defined(ARDUINO)
 
 bool can_send(const std::string &utf8_text) {
   return check_text(utf8_text).can_send;
 }
 
+#endif // !defined(ARDUINO)
+
 } // namespace xiaozhi
+
+#endif // !defined(ARDUINO) || defined(LARGE_MEMORY)

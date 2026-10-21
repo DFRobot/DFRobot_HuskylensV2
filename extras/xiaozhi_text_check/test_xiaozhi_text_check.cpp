@@ -4,7 +4,7 @@
 //   "EN N"  = "the quick brown fox jumps over the lazy dog and runs far away" 前 N 字符
 //   "RD N"  = "41421356237309504880168872420969807856967187537694" 前 N 字符
 
-#include "xiaozhi_text_check.h"
+#include "../../XiaozhiTextCheck.h"
 
 #include <cstring>
 #include <iostream>
@@ -92,7 +92,11 @@ int main() {
   int passed = 0;
   for (const Case &c : cases) {
     xiaozhi::CheckResult r = check_text(c.input);
-    bool ok = (r.can_send == c.expect);
+    // 三个入口(std::string / C字符串 / C字符串+长度)结论必须一致
+    bool ok = (r.can_send == c.expect) &&
+              (xiaozhi::can_send(c.input) == c.expect) &&
+              (xiaozhi::can_send(c.input.c_str()) == c.expect) &&
+              (xiaozhi::can_send(c.input.c_str(), c.input.size()) == c.expect);
     if (ok)
       ++passed;
     std::cout << (ok ? "[PASS] " : "[FAIL] ") << '#' << c.no << ' ' << c.name

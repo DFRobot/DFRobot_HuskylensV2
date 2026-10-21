@@ -1,5 +1,10 @@
 #include <ProtocolV2.h>
 
+// 小智平台文本长度校验(仅大内存 MCU; AVR 上 sendAgentPrompt 本身不编译)
+#ifdef LARGE_MEMORY
+#include <XiaozhiTextCheck.h>
+#endif
+
 static uint8_t send_buffer[CMD_BUFFER_SIZE];
 static uint8_t receive_buffer[FRAME_BUFFER_SIZE];
 
@@ -1168,6 +1173,16 @@ bool ProtocolV2::e2eSendAnnotation(String annotation) {
 bool ProtocolV2::sendAgentPrompt(const String &prompt, eAgentType_t agentType) {
   DBG("\n");
   if (prompt.length() == 0) return false;
+
+  // 仅小智平台有 listen/detect 长度限制, 发送前校验文本,
+  // 超限直接拒绝, 避免平台告警或静默丢弃(宁可误拒, 绝不误放)。
+  // 使用 (const char *, size_t) 纯整数路径, 不实例化 std::string,
+  // 以便在不链接 -lstdc++ 的 core(如 micro:bit nRF5)上通过链接
+  if (eXIAOZHI_AGENT == agentType &&
+      !xiaozhi::can_send(prompt.c_str(), prompt.length())) {
+    DBG_PRINTLN("prompt exceeds xiaozhi listen/detect length limit, rejected");
+    return false;
+  }
 
   // 每片String最多 238 字节
   // data_length 为单字节，整包数据不能超过 255
