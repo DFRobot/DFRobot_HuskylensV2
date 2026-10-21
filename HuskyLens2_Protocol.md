@@ -33,8 +33,9 @@
 | 17 | BARCODE_RECOGNITION |  |
 | 18 | QRCODE_RECOGNITION |  |
 | 19 | FALLDOWN_RECOGNITION |  |
-| 20 | RFU |  |
-| 21 | RFU |  |
+| 20 | DEPTH_DETECTION |  |
+| 21 | AUTO_DRIVE_1 | Auto Drive Smart Traffic; result contains steering and throttle |
+| 22 | AUTO_DRIVE_2 | Auto Drive City Roads; result contains steering and throttle |
 | ... | ... |  |
 | 100-127 | RESERVE |  |
 | 128-255| User installed model |  |

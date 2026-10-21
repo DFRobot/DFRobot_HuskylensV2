@@ -33,8 +33,9 @@
 | 17 | 条形码（BARCODE_RECOGNITION） |  |
 | 18 | 二维码（QRCODE_RECOGNITION） |  |
 | 19 | 跌倒检测（FALLDOWN_RECOGNITION） |  |
-| 20 | RFU |  |
-| 21 | RFU |  |
+| 20 | 深度检测（DEPTH_DETECTION） |  |
+| 21 | 自动驾驶-智慧交通（AUTO_DRIVE_1） | 结果包含转向角度(steering)和油门(throttle) |
+| 22 | 自动驾驶-城市道路（AUTO_DRIVE_2） | 结果包含转向角度(steering)和油门(throttle) |
 | ... | ... |  |
 | 100-127 | 预留 |  |
 | 128-255| 用户安装的模型 |  |

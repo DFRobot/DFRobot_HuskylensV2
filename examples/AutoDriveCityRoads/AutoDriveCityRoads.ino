@@ -2,12 +2,10 @@
  HUSKYLENS V2 An Easy-to-use AI Machine Vision Sensor
  <https://www.dfrobot.com/product-1922.html>
 
- This example demonstrates the face recognition functionality of HUSKYLENS V2
- via I2C interface. It shows how to initialize the sensor, detect human faces,
- and print detailed information including face ID, center coordinates,
- dimensions, name, content, and the positions of facial features (left eye,
- right eye, nose, left mouth, right mouth) using a helper macro for consistent
- output.
+ This example demonstrates the auto drive (city roads) functionality of
+ HUSKYLENS V2 via I2C interface. It shows how to initialize the sensor, run
+ the end-to-end driving model, and print the steering angle and throttle
+ values for controlling a car.
  ***************************************************
  Created 2025-07-04
  By [Ouki Wang](ouki.wang@dfrobot.com)
@@ -40,20 +38,19 @@ void setup() {
     Serial.println(F("\tgreen line >> SDA/TX; blue line >> SCL/RX"));
     delay(100);
   }
-  huskylens.switchAlgorithm(ALGORITHM_DONKEYCAR);
+  huskylens.switchAlgorithm(ALGORITHM_AUTO_DRIVE_CITY_ROADS);
   delay(5000);
 }
 
 void loop() {
-  while (!huskylens.getResult(ALGORITHM_DONKEYCAR)) {
+  while (!huskylens.getResult(ALGORITHM_AUTO_DRIVE_CITY_ROADS)) {
     delay(100);
   }
 
-  while (huskylens.available(ALGORITHM_DONKEYCAR)) {
-    Result *result = huskylens.popCachedResult(ALGORITHM_DONKEYCAR);
+  while (huskylens.available(ALGORITHM_AUTO_DRIVE_CITY_ROADS)) {
+    Result *result = huskylens.popCachedResult(ALGORITHM_AUTO_DRIVE_CITY_ROADS);
 
-    Serial.print("result->ID=");
-    Serial.println(result->ID);
+    Serial.println();
 
     Serial.print("result->steering=");
     Serial.println(result->steering);

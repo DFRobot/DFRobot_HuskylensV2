@@ -170,8 +170,8 @@ typedef enum {
   ALGORITHM_QRCODE_RECOGNITION,           // 18
   ALGORITHM_FALLDOWN_RECOGNITION,         // 19
   ALGORITHM_DEPTH_CAMERA,                 // 20
-  ALGORITHM_DONKEYCAR,                    // 21
-  ALGORITHM_CAMERA,                       // 22
+  ALGORITHM_AUTO_DRIVE_SMART_TRAFFIC,       // 21 自动驾驶-智慧交通
+  ALGORITHM_AUTO_DRIVE_CITY_ROADS,          // 22 自动驾驶-城市道路
   ALGORITHM_RFU3,                         // 23
   ALGORITHM_RFU4,                         // 24
   ALGORITHM_CUSTOM0,                      // 25
