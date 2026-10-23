@@ -44,7 +44,7 @@ void setup() {
 }
 
 void loop() {
-  ret = huskylens.startRecording(MEDIA_TYPE_VIDEO, 0, "test5s.mp4");
+  bool ret = huskylens.startRecording(MEDIA_TYPE_VIDEO, 0, "test5s.mp4");
   Serial.print("startRecording test5s.mp4 ret=");
   Serial.println(ret);
   delay(5000);

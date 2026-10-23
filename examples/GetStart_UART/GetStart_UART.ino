@@ -38,6 +38,13 @@ SoftwareSerial Serial1(10, 11); // RX, TX
 #define BAUDRATE 115200
 #define RX_PIN_P0 1
 #define TX_PIN_P1 2
+#elif defined(ARDUINO_BBC_MICROBIT_V2)
+// The sandeepmistry nRF5 core provides no Serial1 and no SoftwareSerial, but
+// the nRF52833 has a free UARTE1 peripheral: use it on edge pins 0 (RX) and
+// 1 (TX). HUSKYLENS green line (TX) >> pin0; blue line (RX) >> pin1.
+Uart Serial1((NRF_UART_Type *)NRF_UARTE1, UARTE1_IRQn, 0, 1); // RX, TX
+extern "C" void UARTE1_IRQHandler(void) { Serial1.IrqHandler(); }
+#define BAUDRATE 115200
 #else
 #define BAUDRATE 115200
 #endif
@@ -48,6 +55,8 @@ void setup() {
   Serial1.begin(BAUDRATE);
 #elif defined(ESP32)
   Serial1.begin(BAUDRATE, SERIAL_8N1, RX_PIN_P0, TX_PIN_P1);
+#elif defined(ARDUINO_BBC_MICROBIT_V2)
+  Serial1.begin(BAUDRATE);
 #else
 #endif
 
