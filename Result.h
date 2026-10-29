@@ -262,7 +262,6 @@ typedef struct __attribute__((packed)) {
     int8_t agentType;
     int8_t retValue;
     int8_t lineWidth;
-    int8_t confidence;
   };
   union {
     int16_t first;
@@ -300,13 +299,17 @@ typedef struct __attribute__((packed)) {
     int16_t total_blocks_learned;
     int16_t throttle; // 油门
   };
+  union {
+    int32_t fifth;
+    float   confidence;
+  };
   int8_t payload[0];
 } PacketData_t;
 
 class Result : public PacketData_t {
 public:
   Result(const void *buf);
-  ~Result();
+  virtual ~Result();
 
 public:
   int8_t type = -1;

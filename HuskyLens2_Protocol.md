@@ -3,7 +3,8 @@
 | :--: | :----: | :--: | :----: | :----: |
 | V0.1 | 2025-11-07  | ouki.wang  | ouki.wang@dfrobot.com | First version |
 | V0.2 | 2025-11-26 | ouki.wang  | ouki.wang@dfrobot.com | 1. Add API for retrieving read/write algorithm parameters<br/>2. Remove RETURN_OK and uniformly use RETURN_ARGS<br/>3. Modify command numbers and algorithm numbers<br/>4. Change rectangle setting from x1 y1 x2 y2 to x y width height |
-| V0.3 | 2026-10-13 | thdyyl | yuanlong.yu@dfrobot.com | Add agent commands: GET_AGENT_RESPONSE(0x33), SEND_AGENT_PROMPT(0x34), GET_AGENT_STATUS(0x35), IS_AGENT_RESPONSE_READY(0x36) |
+| V0.3 | 2026-10-13 | ouki.wang | ouki.wang@dfrobot.com | Add agent commands: GET_AGENT_RESPONSE(0x33), SEND_AGENT_PROMPT(0x34), GET_AGENT_STATUS(0x35), IS_AGENT_RESPONSE_READY(0x36) |
+| V0.4 | 2026-10-29 | ouki.wang | ouki.wang@dfrobot.com | Increase the Data segment from 10 bytes to 14 bytes |
 
 ## General Command/Response
 | Head55 | HeadAA  | CMD  | Data Length | Data | Checksum |
@@ -70,7 +71,7 @@
 Shake hands with HUSKYLENS V2 and tell it whether you're a large-memory MCU or a small-memory MCU.
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x00  | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x00  | 1 byte | 14 |14 bytes |1 byte |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -78,7 +79,7 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1  | boardType<br/>(0 small ram) <br/>(1 large ram) |
-| 1-9 | 9 | RFU  |
+| 1 | 13 | RFU  |
 
 ## 2. GET_RESULT(0x01)
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Checksum |
@@ -93,7 +94,7 @@ Assume the key length is n
 
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data |Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x02  | 1 byte | 10+n+1 | 10+n+1 bytes |1 byte|
+| 0x55 | 0xAA  | 0x02  | 1 byte | 14+n+1 | 14+n+1 bytes |1 byte|
 
 Data
 | offset | length  | name  |
@@ -104,8 +105,9 @@ Data
 | 4 | 2 | 0 |
 | 6 | 2 | 0 |
 | 8 | 2 | 0 |
-| 10 | 1 | key length |
-| 11 | n | key |
+| 10 | 4 | 0 |
+| 14 | 1 | key length |
+| 15 | n | key |
 
 ## 4. RFU(0x03)
 ## 5. RFU(0x04)
@@ -115,7 +117,7 @@ Data
 Switch Algorithm
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0A | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0A | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -126,6 +128,7 @@ Data
 | 4 | 2 | 0 |
 | 6 | 2 | 0 |
 | 8 | 2 | 0 |
+| 10 | 4 | 0 |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -134,7 +137,7 @@ Set the name based on the learned ID (ID > 0). (Assuming the set name length is 
 
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0B | 1 byte | 10+1+n |1+n |1 byte |
+| 0x55 | 0xAA  | 0x0B | 1 byte | 14+1+n |14+1+n bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -145,8 +148,9 @@ Data
 | 4 | 2 | RFU2 |
 | 6 | 2 | RFU3 |
 | 8 | 2 | RFU4 |
-| 10 | 1 | name length |
-| 11 | n | name |
+| 10 | 4 | RFU5 |
+| 14 | 1 | name length |
+| 15 | n | name |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -155,7 +159,7 @@ Create a combination algorithm. Only one combination algorithm may be created. E
 
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0C | 0 | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0C | 0 | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -166,6 +170,7 @@ Data
 | 4 | 2 | AlgoID1 |
 | 6 | 2 | AlgoID2 |
 | 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -173,17 +178,18 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Set the ratio of algorithm operations in the combination. The number of ratios must match the number of algorithms.
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0D | 0 | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0D | 0 | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | multiAlgoNum (Number of multi-algorithms) |
 | 1 | 1 | RFU0 |
-| 2 | 2 | AlgoID0 |
-| 4 | 2 | AlgoID1 |
-| 6 | 2 | AlgoID2 |
+| 2 | 2 | AlgoID0Ratio |
+| 4 | 2 | AlgoID1Ratio |
+| 6 | 2 | AlgoID2Ratio |
 | 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -191,7 +197,7 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Set algorithm parameters
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0E | 1 byte | 10+n+m+2 |10 by+n+m+2 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0E | 1 byte | 14+n+m+2 |14+n+m+2 bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -202,10 +208,11 @@ Data
 | 4 | 2 |  |
 | 6 | 2 |  |
 | 8 | 2 |  |
-| 10 | 1 | key（string） length |
-| 11 | n |  |
-| 11+n | 1 | arg0（string）length |
-| 11+n+1 | m | arg0（string） |
+| 10 | 4 | RFU0 |
+| 14 | 1 | key（string） length |
+| 15 | n |  |
+| 15+n | 1 | arg0（string）length |
+| 15+n+1 | m | arg0（string） |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -224,7 +231,7 @@ Return command: RETURN_ARGS retValue=0 indicates successful execution, other val
 Return parameters: up to 4 numeric parameters and 2 string parameters
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data |Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1A | 1 byte | 10 or 10 + n + m |10 byte|1 byte |
+| 0x55 | 0xAA  | 0x1A | 1 byte | 14 + 2 + n + m |14 + 2 + n + m bytes|1 byte |
 
 Data
 | offset | length  | name  |
@@ -235,15 +242,16 @@ Data
 | 4 | 2 |  |
 | 6 | 2 |  |
 | 8 | 2 |  |
-| 10 | 1 | key（string） length |
-| 11 | n |  |
-| 11+n | 1 | arg0（string）length |
-| 11+n+1 | m | arg0（string） |
+| 10 | 4 | |
+| 14 | 1 | key（string） length |
+| 15 | n |  |
+| 15+n | 1 | arg0（string）length |
+| 15+n+1 | m | arg0（string） |
 
 ## 14. RETURN_INFO（0x1B）
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1B | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x1B | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -254,13 +262,14 @@ Data
 | 4 | 2 | total_results_learned(Total number studied) |
 | 6 | 2 | total_blocks (Total number of blocks)|
 | 8 | 2 | total_blocks_learned (Total number of blocks studied)|
+| 10 | 4 | RFU1 |
 
 
 ## 15. RETURN_BLOCKS（0x1C）
 Assume the block's name has length n and its content has length m.
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1C | 1 byte | 10+2+n+m+private_data_length |10 bytes+private_data_length bytes |1 byte |
+| 0x55 | 0xAA  | 0x1C | 1 byte | 14+2+n+m+private_data_length |14+2+n+m bytes+private_data_length bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -271,16 +280,17 @@ Data
 | 4 | 2 | yCenter |
 | 6 | 2 | width |
 | 8 | 2 | height |
-| 10 | 1 | name length |
-| 11 | n | name |
-| 11+n | 1 | content length |
-| 11+n+1 | m | content |
+| 10 | 4 | confidence |
+| 14 | 1 | name length |
+| 15 | n | name |
+| 15+n | 1 | content length |
+| 15+n+1 | m | content |
 |  |  | Algorithm Private Data |
 
 ## 16. RETURN_ARROWS(0x1D)
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1D | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x1D | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 The returned data is a vector. The starting point of the Level 1 vector is the midpoint of the screen's bottom edge (320, 480). The vertical line corresponds to an angle of 0 degrees. Rotating clockwise increases the angle up to 90 degrees, while rotating counterclockwise decreases it down to -90 degrees. The starting point of the Level 2 vector is the endpoint of the Level 1 vector. This design supports operations that add vectors of different levels.
@@ -288,11 +298,12 @@ The returned data is a vector. The starting point of the Level 1 vector is the m
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | ID |
-| 1 | 1 | RFU |
+| 1 | 1 | RFU0 |
 | 2 | 2 | xTarget |
 | 4 | 2 | yTarget |
 | 6 | 2 | angle（-90，90） |
-| 7 | 2 | length |
+| 8 | 2 | length |
+| 10 | 4 | RFU1 |
 
 ## 17. ACTION_TAKE_PHOTO(0x20)
 Take a photo
@@ -333,13 +344,13 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Save current configuration to the knowledge base
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x24  | 1 byte | 10  |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x24  | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | knowLedges_id range[0, 4] |
-| 1-9 | 9 | RFU |
+| 1 | 13 | RFU |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -347,13 +358,13 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Load Knowledge Base
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x25  | 1 byte | 10  |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x25  | 1 byte | 14  |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | knowLedges_id range[0, 4] |
-| 1 | 9 | RFU |
+| 1 | 13 | RFU |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -361,17 +372,18 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Draw a rectangle
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x26  | 1 byte | 10  |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x26  | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
-| 0 | 1 | colorID |
+| 0 | 1 | 0 |
 | 1 | 1 | lineWidth |
 | 2 | 2 | x |
 | 4 | 2 | y |
 | 6 | 2 | width |
 | 8 | 2 | height |
+| 10 | 4 | RGBA |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -384,22 +396,25 @@ Clear all rectangles drawn via the communication protocol
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
 ## 25. ACTION_DRAW_TEXT(0x28)
-Draw text, if background color bgColorID is set, use bgColorIDFixed=bgColorID+256, if no background color, bgColorIDFixed
-| Head55 | HeadAA  | CMD  | Algo ID | Data Length | Checksum |
-| :--: | :----: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x28  | 1 byte | 0  |1 byte |
+Draw text at the specified coordinates.
+fontSize only supports [20, 24, 26, 27, 28, 32, 36, 40, 48]
+
+| Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
+| :--: | :----: | :--: | :--: | :--: | :--: | :--: |
+| 0x55 | 0xAA  | 0x28  | 1 byte | 14+1+n | 14+1+n Bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
-| 0 | 1 | colorID |
-| 1 | 1 | lineWidth |
+| 0 | 1 | RFU0 |
+| 1 | 1 | fontSize |
 | 2 | 2 | x |
 | 4 | 2 | y |
-| 6 | 2 | RFU0 |
-| 8 | 2 | RFU1 |
-| 10 | 1 | Text length |
-| 11 | n | text |
+| 6 | 2 | RFU1 |
+| 8 | 2 | RFU2 |
+| 10 | 4 | RGBA |
+| 14 | 1 | Text length |
+| 15 | n | text |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -415,7 +430,7 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Play music
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x2A | 0 | 10+1+n  | 10+1+n bytes | 1byte |
+| 0x55 | 0xAA  | 0x2A | 0 | 14+1+n | 14+1+n bytes | 1byte |
 
 Data
 | offset | length  | name  |
@@ -426,8 +441,9 @@ Data
 | 4 | 2 | RFU2 |
 | 6 | 2 | RFU3 |
 | 8 | 2 | RFU4 |
-| 10 | 1 | name length |
-| 11 | n | name |
+| 10 | 4 | RFU5 |
+| 14 | 1 | name length |
+| 15 | n | name |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -443,7 +459,7 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 Set the position and size of the learning box [Currently only available for object tracking]
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data| Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x2C | 1 byte | 10  |10 bytes|1 byte |
+| 0x55 | 0xAA  | 0x2C | 1 byte | 14 |14 bytes|1 byte |
 
 Data
 | offset | length  | name  |
@@ -454,6 +470,7 @@ Data
 | 4 | 2 | y |
 | 6 | 2 | width |
 | 8 | 2 | height |
+| 10 | 4 | RFU2 |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 arg0_int is the learned ID. 0 indicates not learned, while >=1 indicates the learned ID.
@@ -462,17 +479,18 @@ arg0_int is the learned ID. 0 indicates not learned, while >=1 indicates the lea
 Drawing a single rectangle will clear any previously drawn rectangles on the screen.
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data| Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x2D | 1 byte | 10  |10 bytes|1 byte |
+| 0x55 | 0xAA  | 0x2D | 1 byte | 14 |14 bytes|1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
-| 0 | 1 | colorID |
+| 0 | 1 | RFU |
 | 1 | 1 | lineWidth |
 | 2 | 2 | x |
 | 4 | 2 | y |
 | 6 | 2 | width |
 | 8 | 2 | height |
+| 10 | 4 | RGB |
 
 Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indicate execution failure.
 
@@ -480,9 +498,9 @@ Return: RETURN_ARGS retValue=0 indicates successful execution. Other values indi
 
 Start recording audio or video, file name can be omitted
 
-| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
-| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x2E |    0    |     10      | 10 bytes |  1 byte  |
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |     Data     | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :----------: | :------: |
+|  0x55  |  0xAA  | 0x2E |    0    |   14+1+n    | 14+1+n bytes |  1 byte  |
 
 Data
 
@@ -491,11 +509,12 @@ Data
 |   0    |   1    | 0:              default<br/> 1:           640x480 <br/>2:       1280x720 <br/>3:     1920x1080<br/> |
 |   1    |   1    | 1:           audio<br/> 2:           video <br/>3:      ( audio+video ) |
 |   2    |   2    |                           duration                           |
-|   4    |   2    |                                                              |
-|   6    |   2    |                                                              |
-|   8    |   2    |                                                              |
-|   10   |   1    |                       filename length                        |
-|   11   |   n    |                           filename                           |
+|   4    |   2    |                             RFU0                             |
+|   6    |   2    |                             RFU1                             |
+|   8    |   2    |                             RFU2                             |
+|   10   |   4    |                             RFU3                             |
+|   14   |   1    |                       filename length                        |
+|   15   |   n    |                           filename                           |
 
 Return command: RETURN_ARGS retValue=0 indicates successful execution, other values indicate execution failure, with attached file name or error information
 
@@ -503,11 +522,11 @@ Return command: RETURN_ARGS retValue=0 indicates successful execution, other val
 
 ## 32. ACTION_STOP_RECORDING(0x2F)
 
-Start recording audio or video
+Stop recording audio or video
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x2F |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x2F |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -515,7 +534,7 @@ Data
 | :----: | :----: | :----------------------------------------------------------: |
 |   0    |   1    |                              0                               |
 |   1    |   1    | 1:           audio<br/> 2:           video <br/>3:      ( audio+video ) |
-|   2    |   8    |                              0                               |
+|   2    |   12   |                              0                               |
 
 Return command: RETURN_ARGS retValue=0 indicates successful execution, other values indicate execution failure, with attached file name or error information
 
@@ -527,7 +546,7 @@ Get the agent's response. A long response is returned in fragments: the host sen
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x33 |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x33 |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -535,7 +554,7 @@ Data
 | :----: | :----: | :--: |
 | 0 | 1 | RFU0 |
 | 1 | 1 | agentType (0: xiaozhi agent) |
-| 2 | 8 | RFU |
+| 2 | 12 | RFU |
 
 Return command: RETURN_ARGS
 
@@ -547,9 +566,11 @@ Response Data
 | 1 | 1 | retValue: 0 indicates success, other values indicate failure (e.g. response not ready) |
 | 2 | 2 | fragmentCount (total number of fragments) |
 | 4 | 2 | fragmentIndex (current fragment index, starting from 0) |
-| 6 | 4 | RFU |
-| 10 | 1 | response fragment length |
-| 11 | n | response fragment content (UTF-8) |
+| 6 | 2 | RFU0 |
+| 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
+| 14 | 1 | response fragment length |
+| 15 | n | response fragment content (UTF-8) |
 
 ## 34. SEND_AGENT_PROMPT(0x34)
 
@@ -557,7 +578,7 @@ Send a prompt to the agent. The prompt is sent as a UTF-8 byte stream in fragmen
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x34 |    0    |   10+1+n    | 10+1+n bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x34 |    0    |   14+1+n   | 14+1+n bytes |  1 byte  |
 
 Data
 
@@ -567,9 +588,11 @@ Data
 | 1 | 1 | agentType (0: xiaozhi agent) |
 | 2 | 2 | fragmentCount (total number of fragments) |
 | 4 | 2 | fragmentIndex (current fragment index, starting from 0) |
-| 6 | 4 | RFU |
-| 10 | 1 | prompt fragment length |
-| 11 | n | prompt fragment content (UTF-8) |
+| 6 | 2 | RFU0 |
+| 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
+| 14 | 1 | prompt fragment length |
+| 15 | n | prompt fragment content (UTF-8) |
 
 Return command: RETURN_ARGS retValue=0 indicates the fragment was received successfully, other values indicate failure
 
@@ -579,7 +602,7 @@ Query the current status of the agent.
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x35 |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x35 |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -587,7 +610,7 @@ Data
 | :----: | :----: | :--: |
 | 0 | 1 | RFU0 |
 | 1 | 1 | agentType (0: xiaozhi agent) |
-| 2 | 8 | RFU |
+| 2 | 12 | RFU |
 
 Return command: RETURN_ARGS
 
@@ -599,7 +622,7 @@ Response Data
 | 1 | 1 | retValue: 0 indicates the query succeeded, other values indicate failure |
 | 2 | 2 | RFU |
 | 4 | 2 | status code: 0=idle<br/>1=processing<br/>2=broadcasting<br/>3=disabled (xiaozhi switch is off)<br/> |
-| 6 | 4 | RFU |
+| 6 | 8 | RFU |
 
 Note: older firmware may not include the status code field in the response; the host should treat this case as idle.
 
@@ -609,7 +632,7 @@ Query whether the agent's response is ready.
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x36 |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x36 |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -617,7 +640,7 @@ Data
 | :----: | :----: | :--: |
 | 0 | 1 | RFU0 |
 | 1 | 1 | agentType (0: xiaozhi agent) |
-| 2 | 8 | RFU |
+| 2 | 12 | RFU |
 
 Return command: RETURN_ARGS retValue=0 indicates the response is ready and can be fetched with GET_AGENT_RESPONSE; other values indicate it is not ready yet
 

@@ -255,6 +255,7 @@ Result *HuskylensV2::getCurrentBranch(eAlgorithm_t algo) {
   if (result[algo][0] && (result[algo][0]->level == 1)) {
     return result[algo][0];
   }
+  return rlt;
 }
 
 int8_t HuskylensV2::getUpcomingBranchCount(eAlgorithm_t algo) {

@@ -10,22 +10,32 @@ Result::Result(const void *buf) {
   yCenter = packet->second;
   width = packet->third;
   height = packet->fourth;
+  confidence = packet->confidence;
   used = 0;
   String_t *pname = (String_t *)packet->payload;
-  String_t *pcontent =
-      (String_t *)(packet->payload + sizeof(String_t) + pname->length);
+  uint16_t headerSize = (uint16_t)((uint32_t)pname - (uint32_t)packet);
   DBG_KV("sizeof(String_t)=", sizeof(String_t));
   DBG_KV("pname->length=", pname->length);
-  DBG_KV("pcontent->length=", pcontent->length);
 
-  if (head->data_length == (uint8_t)((uint32_t)pname - (uint32_t)packet)) {
+  if (head->data_length <= headerSize) {
     DBG("no string data");
+  } else if (headerSize + sizeof(String_t) * 2 + pname->length >
+             head->data_length) {
+    DBG("string data truncated");
   } else {
+    String_t *pcontent =
+        (String_t *)(packet->payload + sizeof(String_t) + pname->length);
+    DBG_KV("pcontent->length=", pcontent->length);
     if (pname->length) {
       name = pname->toString();
     }
-    if (pcontent->length) {
-      content = pcontent->toString();
+    if (headerSize + sizeof(String_t) * 2 + pname->length + pcontent->length <=
+        head->data_length) {
+      if (pcontent->length) {
+        content = pcontent->toString();
+      }
+    } else {
+      DBG("content data truncated");
     }
   }
   DBG_KV("type=", type);
@@ -53,18 +63,25 @@ FaceResult::FaceResult(const void *buf) : Result(buf) {
   PacketHead_t *head = (PacketHead_t *)buf;
   PacketData_t *packet = (PacketData_t *)head->data;
   String_t *pname = (String_t *)packet->payload;
+  uint16_t headerSize = (uint16_t)((uint32_t)pname - (uint32_t)packet);
+  if (head->data_length <= headerSize) {
+    DBG("no string data");
+    return;
+  }
+  if (headerSize + sizeof(String_t) * 2 + pname->length > head->data_length) {
+    DBG("string data truncated");
+    return;
+  }
   String_t *pcontent =
       (String_t *)(packet->payload + sizeof(String_t) + pname->length);
-  if (head->data_length == (uint8_t)((uint32_t)pname - (uint32_t)packet)) {
-    DBG("no string data");
+  uint16_t faceDataSize = headerSize + sizeof(String_t) * 2 + pname->length +
+                          pcontent->length;
+  if (head->data_length < faceDataSize + sizeof(int16_t) * 10) {
+    DBG("no externed data");
     return;
   }
   int16_t *face_data = (int16_t *)(packet->payload + pname->length +
                                    pcontent->length + sizeof(String_t) * 2);
-  if (head->data_length == (uint8_t)((uint32_t)face_data - (uint32_t)packet)) {
-    DBG("no externed data");
-    return;
-  }
 
   leye_x = READ_INT16(face_data);
   leye_y = READ_INT16(face_data);
@@ -83,19 +100,25 @@ HandResult::HandResult(const void *buf) : Result(buf) {
   PacketHead_t *head = (PacketHead_t *)buf;
   PacketData_t *packet = (PacketData_t *)head->data;
   String_t *pname = (String_t *)packet->payload;
+  uint16_t headerSize = (uint16_t)((uint32_t)pname - (uint32_t)packet);
+  if (head->data_length <= headerSize) {
+    DBG("no string data");
+    return;
+  }
+  if (headerSize + sizeof(String_t) * 2 + pname->length > head->data_length) {
+    DBG("string data truncated");
+    return;
+  }
   String_t *pcontent =
       (String_t *)(packet->payload + sizeof(String_t) + pname->length);
-
-  if (head->data_length == (uint8_t)((uint32_t)pname - (uint32_t)packet)) {
-    DBG("no string data");
+  uint16_t handDataSize = headerSize + sizeof(String_t) * 2 + pname->length +
+                          pcontent->length;
+  if (head->data_length < handDataSize + sizeof(int16_t) * 40) {
+    DBG("no externed data");
     return;
   }
   int16_t *hand_data = (int16_t *)(packet->payload + pname->length +
                                    pcontent->length + sizeof(String_t) * 2);
-  if (head->data_length <= (uint8_t)((uint32_t)hand_data - (uint32_t)packet)) {
-    DBG("no externed data");
-    return;
-  }
 
   wrist_x = READ_INT16(hand_data); // 手腕
   wrist_y = READ_INT16(hand_data);
@@ -155,21 +178,27 @@ PoseResult::PoseResult(const void *buf) : Result(buf) {
   PacketHead_t *head = (PacketHead_t *)buf;
   PacketData_t *packet = (PacketData_t *)head->data;
   String_t *pname = (String_t *)packet->payload;
-  String_t *pcontent =
-      (String_t *)(packet->payload + sizeof(String_t) + pname->length);
-  int16_t *pose_data = (int16_t *)(packet->payload + pname->length +
-                                   pcontent->length + sizeof(String_t) * 2);
-  if (head->data_length == (uint8_t)((uint32_t)pname - (uint32_t)packet)) {
+  uint16_t headerSize = (uint16_t)((uint32_t)pname - (uint32_t)packet);
+  if (head->data_length <= headerSize) {
     DBG("no string data");
     return;
   }
-  if (head->data_length == (uint8_t)((uint32_t)pose_data - (uint32_t)packet)) {
+  if (headerSize + sizeof(String_t) * 2 + pname->length > head->data_length) {
+    DBG("string data truncated");
+    return;
+  }
+  String_t *pcontent =
+      (String_t *)(packet->payload + sizeof(String_t) + pname->length);
+  uint16_t poseDataSize = headerSize + sizeof(String_t) * 2 + pname->length +
+                          pcontent->length;
+  if (head->data_length < poseDataSize + sizeof(int16_t) * 34) {
     DBG("no externed data");
     return;
   }
   DBG("hax externed data");
-  DBG_PRINTLN(head->data_length -
-              (uint8_t)((uint32_t)pose_data - (uint32_t)packet));
+  DBG_PRINTLN(head->data_length - poseDataSize);
+  int16_t *pose_data = (int16_t *)(packet->payload + pname->length +
+                                   pcontent->length + sizeof(String_t) * 2);
   nose_x = READ_INT16(pose_data);
   nose_y = READ_INT16(pose_data);
   leye_x = READ_INT16(pose_data);

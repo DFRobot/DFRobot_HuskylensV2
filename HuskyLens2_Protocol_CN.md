@@ -3,7 +3,8 @@
 | :--: | :----: | :--: | :----: | :----: |
 | V0.1 | 2025-11-07  | 王辉  | ouki.wang@dfrobot.com | 初始版本 |
 | V0.2 | 2025-11-26 | 王辉  | ouki.wang@dfrobot.com | 1. 添加获取读写算法参数api<br/>2.  删除RETURN_OK，统一使用RETURN_ARGS<br/>3.  修改命令号，算法号<br/> 4.  将设置矩形的x1 y1 x2 y2改为x y widht height<br/> |
-| V0.3 | 2026-10-13 | thdyyl | yuanlong.yu@dfrobot.com | 添加智能体（Agent）命令：GET_AGENT_RESPONSE(0x33)、SEND_AGENT_PROMPT(0x34)、GET_AGENT_STATUS(0x35)、IS_AGENT_RESPONSE_READY(0x36) |
+| V0.3 | 2026-10-13 | 王辉 | ouki.wang@dfrobot.com | 添加智能体（Agent）命令：GET_AGENT_RESPONSE(0x33)、SEND_AGENT_PROMPT(0x34)、GET_AGENT_STATUS(0x35)、IS_AGENT_RESPONSE_READY(0x36) |
+| V0.4 | 2026-10-29 | 王辉 | ouki.wang@dfrobot.com | 将Data段从10字节增大到14字节 |
 
 ## 通用命令/响应
 | Head55 | HeadAA  | CMD  | Data Length | Data | Checksum |
@@ -70,7 +71,7 @@
 和二哈握手，告诉二哈自己是大内存的mcu还是小内存的mcu
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x00  | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x00  | 1 byte | 14 |14 bytes |1 byte |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -78,7 +79,7 @@
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1  | boardType<br/>(0 small ram) <br/>(1 large ram) |
-| 1-9 | 9 | RFU  |
+| 1 | 13 | RFU  |
 
 ## 2. GET_RESULT(0x01)
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Checksum |
@@ -93,7 +94,7 @@
 
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data |Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x02  | 1 byte | 10+n+1 | 10+n+1 bytes |1 byte|
+| 0x55 | 0xAA  | 0x02  | 1 byte | 14+n+1 | 14+n+1 bytes |1 byte|
 
 Data段
 | offset | length  | name  |
@@ -104,8 +105,9 @@ Data段
 | 4 | 2 | 0 |
 | 6 | 2 | 0 |
 | 8 | 2 | 0 |
-| 10 | 1 | key length |
-| 11 | n | key |
+| 10 | 4 | 0 |
+| 14 | 1 | key length |
+| 15 | n | key |
 
 ## 4. RFU(0x03)
 ## 5. RFU(0x04)
@@ -115,7 +117,7 @@ Data段
 切换算法
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0A | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0A | 1 byte | 14 |14 bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -126,6 +128,7 @@ Data段
 | 4 | 2 | 0 |
 | 6 | 2 | 0 |
 | 8 | 2 | 0 |
+| 10 | 4 | 0 |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -134,7 +137,7 @@ Data段
 
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0B | 1 byte | 10+1+n |1+n |1 byte |
+| 0x55 | 0xAA  | 0x0B | 1 byte | 14+1+n |14+1+n bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -145,8 +148,9 @@ Data段
 | 4 | 2 | RFU2 |
 | 6 | 2 | RFU3 |
 | 8 | 2 | RFU4 |
-| 10 | 1 | name length |
-| 11 | n | name |
+| 10 | 4 | RFU5 |
+| 14 | 1 | name length |
+| 15 | n | name |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -155,7 +159,7 @@ Data段
 
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0C | 0 | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0C | 0 | 14 |14 bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -166,6 +170,7 @@ Data段
 | 4 | 2 | AlgoID1 |
 | 6 | 2 | AlgoID2 |
 | 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -173,7 +178,7 @@ Data段
 设置组合算法运算比，运算比个数必须和算法个数相同
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0D | 0 | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0D | 0 | 14 |14 bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -184,6 +189,7 @@ Data段
 | 4 | 2 | AlgoID1Ratio |
 | 6 | 2 | AlgoID2Ratio |
 | 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -191,7 +197,7 @@ Data段
 设置算法参数
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x0E | 1 byte | 10+n+m+2 |10 by+n+m+2 bytes |1 byte |
+| 0x55 | 0xAA  | 0x0E | 1 byte | 14+n+m+2 |14+n+m+2 bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -202,10 +208,11 @@ Data段
 | 4 | 2 |  |
 | 6 | 2 |  |
 | 8 | 2 |  |
-| 10 | 1 | key（string） length |
-| 11 | n |  |
-| 11+n | 1 | arg0（string）length |
-| 11+n+1 | m | arg0（string） |
+| 10 | 4 | RFU0 |
+| 14 | 1 | key（string） length |
+| 15 | n |  |
+| 15+n | 1 | arg0（string）length |
+| 15+n+1 | m | arg0（string） |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -226,7 +233,7 @@ Data段
 返回参数最多4个数字参数和2个string参数
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data |Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1A | 1 byte | 10或10 + n + m |10 byte|1 byte |
+| 0x55 | 0xAA  | 0x1A | 1 byte | 14 + 2 + n + m |14 + 2+ n + m bytes|1 byte |
 
 Data段
 | offset | length  | name  |
@@ -237,16 +244,17 @@ Data段
 | 4 | 2 |  |
 | 6 | 2 |  |
 | 8 | 2 |  |
-| 10 | 1 | key（string） length |
-| 11 | n |  |
-| 11+n | 1 | arg0（string）length |
-| 11+n+1 | m | arg0（string） |
+| 10 | 4 | |
+| 14 | 1 | key（string） length |
+| 15 | n |  |
+| 15+n | 1 | arg0（string）length |
+| 15+n+1 | m | arg0（string） |
 
 
 ## 14. RETURN_INFO（0x1B）
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1B | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x1B | 1 byte | 14 |14 bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -257,13 +265,14 @@ Data段
 | 4 | 2 | total_results_learned（已学习的总数目） |
 | 6 | 2 | total_blocks （总识别block数目）|
 | 8 | 2 | total_blocks_learned （已学习的block总数目）|
+| 10 | 4 | RFU1 |
 
 
 ## 15. RETURN_BLOCKS（0x1C）
 假设block的name长度n，content长度为m
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1C | 1 byte | 10+2+n+m+私有数据长度 |10 bytes+私有数据长度 bytes |1 byte |
+| 0x55 | 0xAA  | 0x1C | 1 byte | 14+2+n+m+私有数据长度 |14+2+n+m bytes+私有数据长度 bytes |1 byte |
 
 Data段
 | offset | length  | name  |
@@ -274,27 +283,29 @@ Data段
 | 4 | 2 | yCenter |
 | 6 | 2 | width |
 | 8 | 2 | height |
-| 10 | 1 | name length |
-| 11 | n | name |
-| 11+n | 1 | content length |
-| 11+n+1 | m | content |
+| 10 | 4 | confidence |
+| 14 | 1 | name length |
+| 15 | n | name |
+| 15+n | 1 | content length |
+| 15+n+1 | m | content |
 |  |  | 算法私有数据 |
 
 ## 16. RETURN_ARROWS(0x1D)
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x1D | 1 byte | 10 |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x1D | 1 byte | 14 |14 bytes |1 byte |
 
 Data段
 返回的数据是向量，level 1级别向量的起点是屏幕做下边缘中点（320，480），中垂线为角度0，顺时针旋转可增长到90度，逆时针旋转可减少到-90度。level 2级别的向量起点是level 1级别向量终点。因此支持不同级别向量想加的操作。
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | ID |
-| 1 | 1 | RFU |
+| 1 | 1 | RFU0 |
 | 2 | 2 | xTarget |
 | 4 | 2 | yTarget |
 | 6 | 2 | angle（-90，90） |
-| 7 | 2 | length |
+| 8 | 2 | length |
+| 10 | 4 | RFU1 |
 
 
 
@@ -337,13 +348,13 @@ arg0_int 是学习id，0 表示为学习到，>=1表示学习的id
 保存当前配置到知识库
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x24  | 1 byte | 10  |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x24  | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | knowLedges_id  range[0, 4] |
-| 1-9 | 9 | RFU |
+| 1 | 13 | RFU |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -351,13 +362,13 @@ Data
 加载知识库
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x25  | 1 byte | 10  |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x25  | 1 byte | 14  |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
 | :--: | :----: | :--: |
 | 0 | 1 | knowLedges_id range[0, 4] |
-| 1 | 9 | RFU |
+| 1 | 13 | RFU |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -365,7 +376,7 @@ Data
 画一个矩形
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x26  | 1 byte | 10  |10 bytes |1 byte |
+| 0x55 | 0xAA  | 0x26  | 1 byte | 14 |14 bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -376,11 +387,7 @@ Data
 | 4 | 2 | y |
 | 6 | 2 | width |
 | 8 | 2 | height |
-| 9 | 1 | 0 |
-| 10 | 1 | 0 |
-| 11 | 1 | color_R |
-| 12 | 1 | color_G |
-| 13 | 1 | color_B |
+| 10 | 4 | RGBA |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -396,9 +403,9 @@ Data
 在特定坐标处绘制文本
 fontSize 只支持[20, 24, 26, 27, 28, 32, 36, 40, 48]
 
-| Head55 | HeadAA  | CMD  | Algo ID | Data Length | Checksum |
-| :--: | :----: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x28  | 1 byte | 0  |1 byte |
+| Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
+| :--: | :----: | :--: | :--: | :--: | :--: | ---- |
+| 0x55 | 0xAA  | 0x28  | 1 byte | 14+1+n | 14+1+n Bytes |1 byte |
 
 Data
 | offset | length  | name  |
@@ -409,12 +416,9 @@ Data
 | 4 | 2 | y |
 | 6 | 2 | RFU1 |
 | 8 | 2 | RFU2 |
-| 10 | 1 | Text length |
-| 11 | n | text |
-| 11+n | 1 | 0 |
-| 12+n | 1 | color_R |
-| 13+n | 1 | color_G |
-| 14+n | 1 | color_B |
+| 10 | 4 | RGBA |
+| 14 | 1 | Text length |
+| 15 | n | text |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -422,7 +426,7 @@ Data
 清除所有通过通信协议绘制的矩形
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x59  | 1 byte | 0  |1 byte |
+| 0x55 | 0xAA  | 0x29 | 1 byte | 0  |1 byte |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -430,7 +434,7 @@ Data
 播放音频
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length | Data | Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: | :--: |
-| 0x55 | 0xAA  | 0x2A | 0 | 10+1+n  | 10+1+n bytes | 1byte |
+| 0x55 | 0xAA  | 0x2A | 0 | 14+1+n | 14+1+n bytes | 1byte |
 
 Data
 | offset | length  | name  |
@@ -441,8 +445,9 @@ Data
 | 4 | 2 | RFU2 |
 | 6 | 2 | RFU3 |
 | 8 | 2 | RFU4 |
-| 10 | 1 | name length |
-| 11 | n | name |
+| 10 | 4 | RFU5 |
+| 14 | 1 | name length |
+| 15 | n | name |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
@@ -458,7 +463,7 @@ Data
 设置学习框的位置和大小（目前只可用于物体追踪）
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data| Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x2C | 1 byte | 10  |10 bytes|1 byte |
+| 0x55 | 0xAA  | 0x2C | 1 byte | 14 |14 bytes|1 byte |
 
 Data段
 | offset | length  | name  |
@@ -469,6 +474,7 @@ Data段
 | 4 | 2 | y |
 | 6 | 2 | width |
 | 8 | 2 | height |
+| 10 | 4 | RFU2 |
 
 返回命令：RETURN_ARGS，其中retValue=0表示执行成功，其他值表示执行失败。arg0_int是学习ID，0表示未学习到，>=1表示学习的ID
 
@@ -476,7 +482,7 @@ Data段
 画唯一矩形，屏幕上之前绘制的其他矩形会被清除
 | Head55 | HeadAA  | CMD  | Algo ID | Data Length |Data| Checksum |
 | :--: | :----: | :--: | :--: | :--: | :--: |:--: |
-| 0x55 | 0xAA  | 0x2D | 1 byte | 10  |10 bytes|1 byte |
+| 0x55 | 0xAA  | 0x2D | 1 byte | 14 |14 bytes|1 byte |
 
 Data
 | offset | length  | name  |
@@ -487,20 +493,17 @@ Data
 | 4 | 2 | y |
 | 6 | 2 | width |
 | 8 | 2 | height |
-| 9 | 1 | 0 |
-| 10 | 1 | 0 |
-| 11 | 1 | color-R |
-| 12 | 1 | color-G |
-| 13 | 1 | color-B |
+| 10 | 4 | RGB |
+
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败
 
 ## 31. ACTION_START_RECORDING(0x2E)
 
 开始录制音频或视频，filename可省略
 
-| Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
-| :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x2E |    0    |     10      | 10 bytes |  1 byte  |
+| Head55 | HeadAA | CMD  | Algo ID | Data Length |     Data     | Checksum |
+| :----: | :----: | :--: | :-----: | :---------: | :----------: | :------: |
+|  0x55  |  0xAA  | 0x2E |    0    |   14+1+n    | 14+1+n bytes |  1 byte  |
 
 Data
 
@@ -509,11 +512,12 @@ Data
 |   0    |   1    | 0:              default<br/> 1:           640x480 <br/>2:       1280x720 <br/>3:     1920x1080<br/> |
 |   1    |   1    | 1:           audio<br/> 2:           video <br/>3:      ( audio+video ) |
 |   2    |   2    |                           duration                           |
-|   4    |   2    |                                                              |
-|   6    |   2    |                                                              |
-|   8    |   2    |                                                              |
-|   10   |   1    |                       filename length                        |
-|   11   |   n    |                           filename                           |
+|   4    |   2    |                             RFU0                             |
+|   6    |   2    |                             RFU1                             |
+|   8    |   2    |                             RFU2                             |
+|   10   |   4    |                             RFU3                             |
+|   14   |   1    |                       filename length                        |
+|   15   |   n    |                           filename                           |
 
 返回命令：RETURN_ARGS retValue=0 表示执行成功 其他值表示执行失败，附带文件名或错误信息
 
@@ -525,7 +529,7 @@ Data
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x2F |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x2F |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -533,7 +537,7 @@ Data
 | :----: | :----: | :----------------------------------------------------------: |
 |   0    |   1    |                              0                               |
 |   1    |   1    | 1:           audio<br/> 2:           video <br/>3:      ( audio+video ) |
-|   2    |   8    |                              0                               |
+|   2    |   12   |                              0                               |
 
 返回命令：RETURN_ARGS，其中retValue=0表示执行成功，其他值表示执行失败，附带文件名或错误信息
 
@@ -543,7 +547,7 @@ Data
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x33 |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x33 |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -551,7 +555,7 @@ Data
 | :----: | :----: | :--: |
 | 0 | 1 | RFU0 |
 | 1 | 1 | agentType（0：小智Agent） |
-| 2 | 8 | RFU |
+| 2 | 12 | RFU |
 
 返回命令：RETURN_ARGS
 
@@ -563,9 +567,11 @@ Data
 | 1 | 1 | retValue：0 表示成功，其他值表示失败（如回答未就绪） |
 | 2 | 2 | fragmentCount（回答总分片数） |
 | 4 | 2 | fragmentIndex（当前分片序号，从 0 开始） |
-| 6 | 4 | RFU |
-| 10 | 1 | 回答分片 length |
-| 11 | n | 回答分片内容（UTF-8） |
+| 6 | 2 | RFU0 |
+| 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
+| 14 | 1 | 回答分片 length |
+| 15 | n | 回答分片内容（UTF-8） |
 
 ## 34. SEND_AGENT_PROMPT(0x34)
 
@@ -573,7 +579,7 @@ Data
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x34 |    0    |   10+1+n    | 10+1+n bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x34 |    0    |   14+1+n   | 14+1+n bytes |  1 byte  |
 
 Data
 
@@ -583,9 +589,11 @@ Data
 | 1 | 1 | agentType（0：小智Agent） |
 | 2 | 2 | fragmentCount（总分片数） |
 | 4 | 2 | fragmentIndex（当前分片序号，从 0 开始） |
-| 6 | 4 | RFU |
-| 10 | 1 | 提示词分片 length |
-| 11 | n | 提示词分片内容（UTF-8） |
+| 6 | 2 | RFU0 |
+| 8 | 2 | RFU1 |
+| 10 | 4 | RFU2 |
+| 14 | 1 | 提示词分片 length |
+| 15 | n | 提示词分片内容（UTF-8） |
 
 返回命令：RETURN_ARGS retValue=0 表示本分片接收成功，其他值表示失败
 
@@ -595,7 +603,7 @@ Data
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x35 |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x35 |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -603,7 +611,7 @@ Data
 | :----: | :----: | :--: |
 | 0 | 1 | RFU0 |
 | 1 | 1 | agentType（0：小智Agent） |
-| 2 | 8 | RFU |
+| 2 | 12 | RFU |
 
 返回命令：RETURN_ARGS
 
@@ -615,7 +623,7 @@ Data
 | 1 | 1 | retValue：0 表示查询成功，其他值表示失败 |
 | 2 | 2 | RFU |
 | 4 | 2 | 状态码：0=idle（空闲）<br/>1=processing（处理中）<br/>2=broadcasting（播报中）<br/>3=disabled（小智开关未打开）<br/> |
-| 6 | 4 | RFU |
+| 6 | 8 | RFU |
 
 注：旧版固件的应答中可能不包含状态码字段，此时主机应按 idle 处理。
 
@@ -625,7 +633,7 @@ Data
 
 | Head55 | HeadAA | CMD  | Algo ID | Data Length |   Data   | Checksum |
 | :----: | :----: | :--: | :-----: | :---------: | :------: | :------: |
-|  0x55  |  0xAA  | 0x36 |    0    |     10      | 10 bytes |  1 byte  |
+|  0x55  |  0xAA  | 0x36 |    0    |     14      | 14 bytes |  1 byte  |
 
 Data
 
@@ -633,7 +641,7 @@ Data
 | :----: | :----: | :--: |
 | 0 | 1 | RFU0 |
 | 1 | 1 | agentType（0：小智Agent） |
-| 2 | 8 | RFU |
+| 2 | 12 | RFU |
 
 返回命令：RETURN_ARGS retValue=0 表示回答已就绪，可通过 GET_AGENT_RESPONSE 获取；其他值表示尚未就绪
 

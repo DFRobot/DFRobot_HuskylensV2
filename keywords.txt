@@ -55,6 +55,7 @@ timerBegin	KEYWORD2
 timerAvailable	KEYWORD2
 protocolAvailable	KEYWORD2
 wait	KEYWORD2
+confidence	KEYWORD2
 
 e2eStartRecording KEYWORD2
 e2eStopRecording KEYWORD2

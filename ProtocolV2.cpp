@@ -109,9 +109,9 @@ int husky_lens_protocol_write_end() {
   return send_index;
 }
 bool validateCheckSum() {
-  uint8_t stackSumIndex = receive_buffer[CONTENT_SIZE_INDEX] + CONTENT_INDEX;
+  uint16_t stackSumIndex = receive_buffer[CONTENT_SIZE_INDEX] + CONTENT_INDEX;
   uint8_t sum = 0;
-  uint8_t i;
+  uint16_t i;
   // calculate the checksum
   for (i = 0; i < stackSumIndex; i++) {
     sum += receive_buffer[i];
@@ -147,7 +147,7 @@ bool husky_lens_protocol_receive(uint8_t data) {
     receive_buffer[ALGO_INDEX] = data;
     break;
   case CONTENT_SIZE_INDEX:
-    if ((int)receive_index >= FRAME_BUFFER_SIZE - PROTOCOL_SIZE) {
+    if ((int)data + PROTOCOL_SIZE > FRAME_BUFFER_SIZE) {
       receive_index = 0;
       return false;
     }
@@ -178,10 +178,10 @@ bool ProtocolV2::wait(uint8_t command) {
         DBG("return true\n");
         return true;
       } else {
-        DBG("return false\n");
+        // 跳过过期/重复帧，继续等目标命令直到超时
+        DBG("skip unexpected frame\n");
         DBG_HEX(command);
         DBG_HEX(receive_buffer[COMMAND_INDEX]);
-        return false;
       }
     }
   }
@@ -260,7 +260,7 @@ bool ProtocolV2::knock(void) {
 #else
   husky_lens_protocol_write_uint8(BOARD_SMALL_RAM);
 #endif
-  for (uint8_t i = 0; i < 9; i++) {
+  for (uint8_t i = 0; i < 13; i++) {
     husky_lens_protocol_write_uint8(0);
   }
   int length = husky_lens_protocol_write_end();
@@ -289,7 +289,7 @@ bool ProtocolV2::switchAlgorithm(eAlgorithm_t algo) {
       husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_SET_ALGORITHM);
 
   husky_lens_protocol_write_uint8((uint8_t)algo);
-  husky_lens_protocol_write_zero_bytes(9);
+  husky_lens_protocol_write_zero_bytes(13);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -418,6 +418,7 @@ bool ProtocolV2::doSetMultiAlgorithm(eAlgorithm_t algo0, eAlgorithm_t algo1,
       husky_lens_protocol_write_int16(0);
     }
   }
+  husky_lens_protocol_write_zero_bytes(4);
   DBG("----");
   DBG_HEX_ARRAY(buffer, 16);
   int length = husky_lens_protocol_write_end();
@@ -472,6 +473,7 @@ bool ProtocolV2::setMultiAlgorithmRatio(int8_t ratio0, int8_t ratio1,
       husky_lens_protocol_write_int16(0);
     }
   }
+  husky_lens_protocol_write_zero_bytes(4);
   DBG("\n");
   int length = husky_lens_protocol_write_end();
   DBG("\n");
@@ -504,6 +506,7 @@ uint8_t ProtocolV2::learnBlock(eAlgorithm_t algo, int16_t x, int16_t y,
   husky_lens_protocol_write_int16(y);
   husky_lens_protocol_write_int16(width);
   husky_lens_protocol_write_int16(height);
+  husky_lens_protocol_write_zero_bytes(4);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -525,7 +528,7 @@ String ProtocolV2::takePhoto(eResolution_t resolution) {
   uint8_t *buffer =
       husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_ACTION_TAKE_PHOTO);
   husky_lens_protocol_write_uint8(resolution);
-  husky_lens_protocol_write_zero_bytes(9);
+  husky_lens_protocol_write_zero_bytes(13);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -620,7 +623,6 @@ bool ProtocolV2::drawRect(uint32_t color, uint8_t lineWidth, int16_t x,
   husky_lens_protocol_write_int16(y);
   husky_lens_protocol_write_int16(width);
   husky_lens_protocol_write_int16(height);
-  husky_lens_protocol_write_int16(0);
   husky_lens_protocol_write_int32(color);
 
   int length = husky_lens_protocol_write_end();
@@ -653,7 +655,6 @@ bool ProtocolV2::drawUniqueRect(uint32_t color, uint8_t lineWidth, int16_t x,
   husky_lens_protocol_write_int16(y);
   husky_lens_protocol_write_int16(width);
   husky_lens_protocol_write_int16(height);
-  husky_lens_protocol_write_int16(0);
   husky_lens_protocol_write_int32(color);
 
   int length = husky_lens_protocol_write_end();
@@ -708,12 +709,8 @@ bool ProtocolV2::drawText(uint32_t color, uint8_t fontSize, int16_t x,
   husky_lens_protocol_write_int16(y);
   husky_lens_protocol_write_int16(0);
   husky_lens_protocol_write_int16(0);
-  husky_lens_protocol_write_uint8(text.length());
-  for (uint8_t i = 0; i < text.length(); i++) {
-    husky_lens_protocol_write_uint8(text[i]);
-  }
-  husky_lens_protocol_write_uint8(0);
   husky_lens_protocol_write_int32(color);
+  husky_lens_protocol_write_string(text);
 
   int length = husky_lens_protocol_write_end();
 
@@ -760,7 +757,7 @@ bool ProtocolV2::saveKnowledges(eAlgorithm_t algo, uint8_t knowledgeID) {
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_ACTION_SAVE_KNOWLEDGES);
   husky_lens_protocol_write_uint8(knowledgeID);
-  husky_lens_protocol_write_zero_bytes(9);
+  husky_lens_protocol_write_zero_bytes(13);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -784,7 +781,7 @@ bool ProtocolV2::loadKnowledges(eAlgorithm_t algo, uint8_t knowledgeID) {
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_ACTION_LOAD_KNOWLEDGES);
   husky_lens_protocol_write_uint8(knowledgeID);
-  husky_lens_protocol_write_zero_bytes(9);
+  husky_lens_protocol_write_zero_bytes(13);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -811,7 +808,7 @@ bool ProtocolV2::playMusic(String name, int16_t volume) {
   husky_lens_protocol_write_uint8(0);
 
   husky_lens_protocol_write_int16(volume);
-  husky_lens_protocol_write_zero_bytes(6);
+  husky_lens_protocol_write_zero_bytes(10);
   husky_lens_protocol_write_string(name);
   int length = husky_lens_protocol_write_end();
 
@@ -836,7 +833,7 @@ bool ProtocolV2::setNameByID(eAlgorithm_t algo, uint8_t id, String name) {
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_SET_NAME_BY_ID);
   husky_lens_protocol_write_uint8(id);
-  husky_lens_protocol_write_zero_bytes(9);
+  husky_lens_protocol_write_zero_bytes(13);
   husky_lens_protocol_write_string(name);
   int length = husky_lens_protocol_write_end();
 
@@ -860,7 +857,7 @@ bool ProtocolV2::getAlgoParamBool(eAlgorithm_t algo, String key) {
   bool ret = false;
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_GET_ALGO_PARAM);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   husky_lens_protocol_write_string(key);
   husky_lens_protocol_write_uint8(0);
   int length = husky_lens_protocol_write_end();
@@ -887,7 +884,7 @@ float ProtocolV2::getAlgoParamFloat(eAlgorithm_t algo, String key) {
   float ret = 0.0;
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_GET_ALGO_PARAM);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   husky_lens_protocol_write_string(key);
   husky_lens_protocol_write_uint8(0);
   int length = husky_lens_protocol_write_end();
@@ -912,7 +909,7 @@ String ProtocolV2::getAlgoParamString(eAlgorithm_t algo, String key) {
   String ret = "";
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_GET_ALGO_PARAM);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   husky_lens_protocol_write_string(key);
   husky_lens_protocol_write_uint8(0);
   int length = husky_lens_protocol_write_end();
@@ -964,7 +961,7 @@ bool ProtocolV2::setAlgoParamBool(eAlgorithm_t algo, String key, bool value) {
   husky_lens_protocol_write_uint8(0);
 
   husky_lens_protocol_write_int16(value);
-  husky_lens_protocol_write_zero_bytes(6);
+  husky_lens_protocol_write_zero_bytes(10);
   husky_lens_protocol_write_string(key);
   husky_lens_protocol_write_uint8(0);
   int length = husky_lens_protocol_write_end();
@@ -997,6 +994,7 @@ bool ProtocolV2::setAlgoParamFloat(eAlgorithm_t algo, String key, float value) {
   husky_lens_protocol_write_int16(value16[1]);
   husky_lens_protocol_write_int16(0);
   husky_lens_protocol_write_int16(0);
+  husky_lens_protocol_write_zero_bytes(4);
   husky_lens_protocol_write_string(key);
   husky_lens_protocol_write_uint8(0);
   int length = husky_lens_protocol_write_end();
@@ -1022,7 +1020,7 @@ bool ProtocolV2::setAlgoParamString(eAlgorithm_t algo, String key,
   bool ret = false;
   uint8_t *buffer =
       husky_lens_protocol_write_begin(algo, COMMAND_SET_ALGO_PARAMS);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   husky_lens_protocol_write_string(key);
   husky_lens_protocol_write_string(value);
   int length = husky_lens_protocol_write_end();
@@ -1052,7 +1050,7 @@ bool ProtocolV2::startRecording(eMediaType_t mediaType, int16_t duration,
   husky_lens_protocol_write_uint8(mediaType);
 
   husky_lens_protocol_write_int16(duration);
-  husky_lens_protocol_write_zero_bytes(6);
+  husky_lens_protocol_write_zero_bytes(10);
   if (filename.length() > 0) {
     husky_lens_protocol_write_string(filename);
   }
@@ -1079,7 +1077,7 @@ bool ProtocolV2::stopRecording(eMediaType_t mediaType) {
       ALGORITHM_ANY, COMMAND_ACTION_STOP_RECORDING);
   husky_lens_protocol_write_uint8(0);
   husky_lens_protocol_write_uint8(mediaType);
-  husky_lens_protocol_write_zero_bytes(8);
+  husky_lens_protocol_write_zero_bytes(12);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -1103,7 +1101,7 @@ bool ProtocolV2::e2eStartRecording(void) {
   bool ret = false;
   uint8_t *buffer = husky_lens_protocol_write_begin(
     ALGORITHM_ANY, COMMAND_ACTION_E2E_START_RECORDING);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -1126,7 +1124,7 @@ bool ProtocolV2::e2eStopRecording(void) {
   bool ret = false;
   uint8_t *buffer = husky_lens_protocol_write_begin(
     ALGORITHM_ANY, COMMAND_ACTION_E2E_STOP_RECORDING);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -1149,7 +1147,7 @@ bool ProtocolV2::e2eSendAnnotation(String annotation) {
   bool ret = false;
   uint8_t *buffer = husky_lens_protocol_write_begin(
     ALGORITHM_ANY, COMMAND_ACTION_E2E_SEND_ANNOTATION);
-  husky_lens_protocol_write_zero_bytes(10);
+  husky_lens_protocol_write_zero_bytes(14);
   if (annotation.length() > 0) {
     husky_lens_protocol_write_string(annotation);
   }
@@ -1198,7 +1196,7 @@ bool ProtocolV2::sendAgentPrompt(const String &prompt, eAgentType_t agentType) {
     husky_lens_protocol_write_uint8(agentType);
     husky_lens_protocol_write_int16(fragmentCount);
     husky_lens_protocol_write_int16(fragmentIndex);
-    husky_lens_protocol_write_zero_bytes(4);
+    husky_lens_protocol_write_zero_bytes(8);
     husky_lens_protocol_write_string(
       prompt.substring((uint32_t)fragmentIndex * fragSize, (uint32_t)fragmentIndex * fragSize + fragSize));
     int length = husky_lens_protocol_write_end();
@@ -1228,7 +1226,7 @@ eAgentStatus_t ProtocolV2::getAgentStatus(eAgentType_t agentType) {
     ALGORITHM_ANY, COMMAND_ACTION_GET_AGENT_STATUS);
   husky_lens_protocol_write_uint8(0);
   husky_lens_protocol_write_uint8(agentType);
-  husky_lens_protocol_write_zero_bytes(8);
+  husky_lens_protocol_write_zero_bytes(12);
   int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -1259,7 +1257,7 @@ bool ProtocolV2::isAgentResponseReady(eAgentType_t agentType){
     ALGORITHM_ANY, COMMAND_ACTION_IS_AGENT_RESPONSE_READY);
     husky_lens_protocol_write_uint8(0);
     husky_lens_protocol_write_uint8(agentType);
-    husky_lens_protocol_write_zero_bytes(8);
+    husky_lens_protocol_write_zero_bytes(12);
     int length = husky_lens_protocol_write_end();
 
   for (int i = 0; i < retry; i++) {
@@ -1290,7 +1288,7 @@ String ProtocolV2::getAgentResponse(eAgentType_t agentType) {
     uint8_t *buffer = husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_ACTION_GET_AGENT_RESPONSE);
     husky_lens_protocol_write_uint8(0);
     husky_lens_protocol_write_uint8(agentType);
-    husky_lens_protocol_write_zero_bytes(8);
+    husky_lens_protocol_write_zero_bytes(12);
     int length = husky_lens_protocol_write_end();
 
     // 请求帧不带序号，超时重试可能拿到重复片或导致对端推进；
@@ -1308,9 +1306,20 @@ String ProtocolV2::getAgentResponse(eAgentType_t agentType) {
 
     if (packet->fragmentIndex > expected) return ""; // 漏片，数据已不可信
     if (packet->fragmentIndex == expected) {
+      if (expected == 0) {
+        fragmentCount = packet->fragmentCount;
+        // 分片总数只在首片确定并设上限，防止异常对端让主机无限等下去
+        if (fragmentCount <= 0 || fragmentCount > 32) return "";
+      } else if (packet->fragmentCount != fragmentCount) {
+        return ""; // 分片总数中途变化，数据不可信
+      }
       String_t *value = (String_t *)packet->payload;
+      // 分片内容必须完整落在 data 段内
+      if ((uint16_t)((uint32_t)value - (uint32_t)packet) + sizeof(String_t) +
+              value->length >
+          head->data_length)
+        return "";
       response += value->toString();
-      fragmentCount = packet->fragmentCount;
       expected++;
     }
     // fragmentIndex < expected：重试造成的重复片，忽略

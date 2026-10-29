@@ -144,7 +144,6 @@ class UnionInt8_1(ctypes.Union):
         ("level", ctypes.c_int8),
         ("retValue", ctypes.c_int8),
         ("lineWidth", ctypes.c_int8),
-        ("confidence", ctypes.c_int8),
     ]
 
 class UnionInt16_0(ctypes.Union):
@@ -186,9 +185,15 @@ class UnionInt16_3(ctypes.Union):
         ("total_blocks_learned", ctypes.c_int16),
     ]
 
+class UnionInt32_0(ctypes.Union):
+    _fields_ = [
+        ("fifth", ctypes.c_int32),
+        ("confidence", ctypes.c_float),
+    ]
+
 class PacketData_t(ctypes.Structure):
     _pack_ = 1
-    _anonymous_ = ("u0", "u1", "u2", "u3", "u4", "u5")  # 关键点：匿名 union
+    _anonymous_ = ("u0", "u1", "u2", "u3", "u4", "u5", "u6")  # 关键点：匿名 union
     _fields_ = [
         ("u0", UnionInt8_0),
         ("u1", UnionInt8_1),
@@ -196,6 +201,7 @@ class PacketData_t(ctypes.Structure):
         ("u3", UnionInt16_1),
         ("u4", UnionInt16_2),
         ("u5", UnionInt16_3),
+        ("u6", UnionInt32_0),
     ]
     def __init__(self, buf):
         super().__init__()
@@ -215,11 +221,11 @@ class Result(PacketData_t):
         self.algo = buf[ALGO_INDEX]
         self.dataLength = buf[CONTENT_SIZE_INDEX]
         base = CONTENT_INDEX
-        if self.dataLength > 10:
-            if len(buf) > base + 10:
-                self.nameLength = buf[base + 10]
-            if len(buf) > base + 10 + 1 + self.nameLength:
-                self.contentLength = buf[base + 10 + 1 + self.nameLength]
+        if self.dataLength > 14:
+            if len(buf) > base + 14:
+                self.nameLength = buf[base + 14]
+            if len(buf) > base + 14 + 1 + self.nameLength:
+                self.contentLength = buf[base + 14 + 1 + self.nameLength]
         
         self.ID = buf[base]
         self.level = buf[base + 1]
@@ -227,9 +233,13 @@ class Result(PacketData_t):
         self.second = read_u16(buf, base + 4)
         self.third = read_u16(buf, base + 6)
         self.fourth = read_u16(buf, base + 8)
+        if len(buf) > base + 13:
+            self.confidence = struct.unpack_from('<f', bytes(buf[base + 10:base + 14]))[0]
+        else:
+            self.confidence = 0.0
         self.used = False
         
-        str_idx = base + 10
+        str_idx = base + 14
         if self.nameLength > 0:
             self.name = buf[str_idx + 1:str_idx + 1 + self.nameLength].decode("utf-8", "")
         str_idx += 1 + self.nameLength
@@ -246,7 +256,7 @@ class FaceResult(Result):
             ("lmouth_x", 12), ("lmouth_y", 14),
             ("rmouth_x", 16), ("rmouth_y", 18)
         ]
-        base = CONTENT_INDEX + 12 + self.nameLength + self.contentLength
+        base = CONTENT_INDEX + 16 + self.nameLength + self.contentLength
         for name, offset in FACE_FIELDS:
             setattr(self, name, read_u16(buf, base + offset))
 
@@ -281,7 +291,7 @@ class HandResult(Result):
             ("pinky_finger_dip_x", 76), ("pinky_finger_dip_y", 78),
             ("pinky_finger_tip_x", 80), ("pinky_finger_tip_y", 82),
         ]
-        base = CONTENT_INDEX + 12 + self.nameLength + self.contentLength
+        base = CONTENT_INDEX + 16 + self.nameLength + self.contentLength
         for name, offset in HAND_FIELDS:
             setattr(self, name, read_u16(buf, base + offset))
 
@@ -310,7 +320,7 @@ class PoseResult(Result):
             ("lankle_x", 60), ("lankle_y", 62),
             ("rankle_x", 64), ("rankle_y", 66),
         ]
-        base =CONTENT_INDEX + 12 + self.nameLength + self.contentLength
+        base =CONTENT_INDEX + 16 + self.nameLength + self.contentLength
         for name, offset in POSE_FIELDS:
             setattr(self, name, read_u16(buf, base + offset))
 
@@ -349,7 +359,7 @@ class ProtocolV2(object):
     def knock(self):
         self.husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_KNOCK)
         self.husky_lens_protocol_write_uint8(1)
-        self.husky_lens_protocol_write_zero_bytes(9)
+        self.husky_lens_protocol_write_zero_bytes(13)
         self.husky_lens_protocol_write_end()
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
         return ret
@@ -361,7 +371,7 @@ class ProtocolV2(object):
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_INFO)
         if not ret:
             return None
-        if self.receive_index != CONTENT_INDEX + 10:
+        if self.receive_index != CONTENT_INDEX + 14:
             return None
         
         logging.debug(f"receive_index={self.receive_index}")
@@ -431,7 +441,7 @@ class ProtocolV2(object):
             retInt.append(v)
             offset += 2
 
-        offset = CONTENT_INDEX + 10
+        offset = CONTENT_INDEX + 14
         logging.debug(f"contentEnd={contentEnd},offset={offset}")
         while offset < contentEnd:
             length = self.receive_buffer[offset]
@@ -537,6 +547,7 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_int16(y)
         self.husky_lens_protocol_write_int16(width)
         self.husky_lens_protocol_write_int16(height)
+        self.husky_lens_protocol_write_zero_bytes(4)
         self.husky_lens_protocol_write_end()
         ret, argInt, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
         if not ret:
@@ -546,7 +557,7 @@ class ProtocolV2(object):
     def switchAlgorithm(self, algo):
         self.husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_SET_ALGORITHM)
         self.husky_lens_protocol_write_uint8(algo)
-        self.husky_lens_protocol_write_zero_bytes(9)
+        self.husky_lens_protocol_write_zero_bytes(13)
         self.husky_lens_protocol_write_end()
       
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -559,7 +570,7 @@ class ProtocolV2(object):
             return ""
         self.husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_ACTION_TAKE_PHOTO)
         self.husky_lens_protocol_write_uint8(resolutions[resolution])
-        self.husky_lens_protocol_write_zero_bytes(9)
+        self.husky_lens_protocol_write_zero_bytes(13)
         self.husky_lens_protocol_write_end()
         ret, _, argStr = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
         if not ret:
@@ -597,7 +608,6 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_int16(y)
         self.husky_lens_protocol_write_int16(width)
         self.husky_lens_protocol_write_int16(height)
-        self.husky_lens_protocol_write_int16(0)
         self.husky_lens_protocol_write_int32(color)
         self.husky_lens_protocol_write_end()
 
@@ -612,7 +622,6 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_int16(y)
         self.husky_lens_protocol_write_int16(width)
         self.husky_lens_protocol_write_int16(height)
-        self.husky_lens_protocol_write_int16(0)
         self.husky_lens_protocol_write_int32(color)
         self.husky_lens_protocol_write_end()
 
@@ -635,9 +644,8 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_int16(y)
         self.husky_lens_protocol_write_int16(0)
         self.husky_lens_protocol_write_int16(0)
-        self.husky_lens_protocol_write_string(text)
-        self.husky_lens_protocol_write_uint8(0)
         self.husky_lens_protocol_write_int32(color)
+        self.husky_lens_protocol_write_string(text)
         self.husky_lens_protocol_write_end()
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -653,7 +661,7 @@ class ProtocolV2(object):
     def saveKnowledges(self, algo: int, knowledgeID: int):
         self.husky_lens_protocol_write_begin(algo, COMMAND_ACTION_SAVE_KNOWLEDGES)
         self.husky_lens_protocol_write_uint8(knowledgeID)
-        self.husky_lens_protocol_write_zero_bytes(9)
+        self.husky_lens_protocol_write_zero_bytes(13)
         self.husky_lens_protocol_write_end()
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -662,7 +670,7 @@ class ProtocolV2(object):
     def loadKnowledges(self, algo: int, knowledgeID: int):
         self.husky_lens_protocol_write_begin(algo, COMMAND_ACTION_LOAD_KNOWLEDGES)
         self.husky_lens_protocol_write_uint8(knowledgeID)
-        self.husky_lens_protocol_write_zero_bytes(9)
+        self.husky_lens_protocol_write_zero_bytes(13)
         self.husky_lens_protocol_write_end()
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -673,7 +681,7 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_zero_bytes(2)
      
         self.husky_lens_protocol_write_int16(volume)
-        self.husky_lens_protocol_write_zero_bytes(6)
+        self.husky_lens_protocol_write_zero_bytes(10)
         self.husky_lens_protocol_write_string(name)
         self.husky_lens_protocol_write_end()
       
@@ -683,7 +691,7 @@ class ProtocolV2(object):
     def setNameByID(self, algo: int, ID: int, name: str):
         self.husky_lens_protocol_write_begin(algo, COMMAND_SET_NAME_BY_ID)
         self.husky_lens_protocol_write_uint8(ID)
-        self.husky_lens_protocol_write_zero_bytes(9)
+        self.husky_lens_protocol_write_zero_bytes(13)
         self.husky_lens_protocol_write_string(name)
         self.husky_lens_protocol_write_end()
         
@@ -708,6 +716,7 @@ class ProtocolV2(object):
             self.husky_lens_protocol_write_int16(algo)
         for _ in range(4 - len(algos)):
             self.husky_lens_protocol_write_int16(0)
+        self.husky_lens_protocol_write_zero_bytes(4)
         self.husky_lens_protocol_write_end()
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -725,6 +734,7 @@ class ProtocolV2(object):
         for _ in range(4 - len(ratios)):
             self.husky_lens_protocol_write_int16(0xFFFF)
 
+        self.husky_lens_protocol_write_zero_bytes(4)
         self.husky_lens_protocol_write_end()
         
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -740,7 +750,7 @@ class ProtocolV2(object):
                 self.husky_lens_protocol_write_uint8(1)
                 self.husky_lens_protocol_write_uint8(0)
                 self.husky_lens_protocol_write_int16(v)
-                self.husky_lens_protocol_write_zero_bytes(6)
+                self.husky_lens_protocol_write_zero_bytes(10)
                 self.husky_lens_protocol_write_string(k)
             elif isinstance(v, float):
                 float_bytes = struct.pack("<f", v)
@@ -749,10 +759,10 @@ class ProtocolV2(object):
                 self.husky_lens_protocol_write_uint8(0)
                 self.husky_lens_protocol_write_int16(v0)
                 self.husky_lens_protocol_write_int16(v1)
-                self.husky_lens_protocol_write_zero_bytes(4)
+                self.husky_lens_protocol_write_zero_bytes(8)
                 self.husky_lens_protocol_write_string(k)
             elif isinstance(v, str):
-                self.husky_lens_protocol_write_zero_bytes(10)
+                self.husky_lens_protocol_write_zero_bytes(14)
                 self.husky_lens_protocol_write_string(k)
                 self.husky_lens_protocol_write_string(v)
             else:
@@ -774,7 +784,7 @@ class ProtocolV2(object):
         params = {}
         for k in param_keys:
             self.husky_lens_protocol_write_begin(algo, COMMAND_GET_ALGO_PARAM)
-            self.husky_lens_protocol_write_zero_bytes(10)
+            self.husky_lens_protocol_write_zero_bytes(14)
             self.husky_lens_protocol_write_string(k)
             self.husky_lens_protocol_write_end()
             ret, argInt, argStr = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -799,7 +809,7 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_uint8(resolution)
         self.husky_lens_protocol_write_uint8(mediaType)
         self.husky_lens_protocol_write_int16(duration)
-        self.husky_lens_protocol_write_zero_bytes(6)
+        self.husky_lens_protocol_write_zero_bytes(10)
         self.husky_lens_protocol_write_string(filename)
         self.husky_lens_protocol_write_end()
         
@@ -810,7 +820,7 @@ class ProtocolV2(object):
         self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_STOP_RECORDING)
         self.husky_lens_protocol_write_uint8(0)
         self.husky_lens_protocol_write_uint8(mediaType)
-        self.husky_lens_protocol_write_zero_bytes(8)
+        self.husky_lens_protocol_write_zero_bytes(12)
         self.husky_lens_protocol_write_end()
         
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -818,7 +828,7 @@ class ProtocolV2(object):
 
     def e2eStartRecording(self):
         self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_E2E_START_RECORDING)
-        self.husky_lens_protocol_write_zero_bytes(10)
+        self.husky_lens_protocol_write_zero_bytes(14)
         self.husky_lens_protocol_write_end()
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -826,7 +836,7 @@ class ProtocolV2(object):
 
     def e2eStopRecording(self):
         self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_E2E_STOP_RECORDING)
-        self.husky_lens_protocol_write_zero_bytes(10)
+        self.husky_lens_protocol_write_zero_bytes(14)
         self.husky_lens_protocol_write_end()
 
         ret, _, _ = self.executeCommand(wait_cmd=COMMAND_RETURN_ARGS)
@@ -834,7 +844,7 @@ class ProtocolV2(object):
 
     def e2eSendAnnotation(self, annotation:str):
         self.husky_lens_protocol_write_begin(0, COMMAND_ACTION_E2E_SEND_ANNOTATION)
-        self.husky_lens_protocol_write_zero_bytes(10)
+        self.husky_lens_protocol_write_zero_bytes(14)
         self.husky_lens_protocol_write_string(annotation)
         self.husky_lens_protocol_write_end()
 
@@ -944,7 +954,7 @@ class HuskylensV2(ProtocolV2):
         return 0
 
     def createResult(self):
-        return Result([0] * 16)
+        return Result([0] * 20)
 class HuskylensV2_I2C(HuskylensV2):
     def __init__(self, board=None, bus_num=0):
         if isinstance(board, int) or board is None:
