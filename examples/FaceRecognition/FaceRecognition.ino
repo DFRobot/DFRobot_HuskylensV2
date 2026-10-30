@@ -69,6 +69,7 @@ void loop() {
     Serial.print(result->yCenter);
     Serial.println(")");
 
+    Serial.print("result->width=");
     Serial.println(result->width);
     Serial.print("result->height=");
     Serial.println(result->height);
