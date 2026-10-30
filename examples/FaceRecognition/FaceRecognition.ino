@@ -20,9 +20,12 @@
 /***********Notice and Trouble shooting***************
  1.Connection and Diagram can be found here
  <https://wiki.dfrobot.com/HUSKYLENS_V1.0_SKU_SEN0305_SEN0336#target_23>
- 2.This code is tested on Arduino Uno, Leonardo, Mega, Microbit,ESP8266,ESP32
+ 2.This code is tested on Microbit,ESP8266,ESP32
  boards.
  ****************************************************/
+#ifndef LARGE_MEMORY
+#error "The selected board does not support this example."
+#endif
 
 #include "DFRobot_HuskylensV2.h"
 
@@ -57,9 +60,13 @@ void loop() {
   }
 
   while (huskylens.available(ALGORITHM_FACE_RECOGNITION)) {
+#ifdef LARGE_MEMORY // ESP32  ESP8266
     FaceResult *result = static_cast<FaceResult *>(
         huskylens.popCachedResult(ALGORITHM_FACE_RECOGNITION));
-
+#else // AVR MCUs
+    Result *result = static_cast<Result *>(
+        huskylens.popCachedResult(ALGORITHM_FACE_RECOGNITION));
+#endif
     Serial.print("result->ID=");
     Serial.println(result->ID);
 
@@ -78,11 +85,13 @@ void loop() {
     Serial.print("result->content=");
     Serial.println(result->content);
 
+#ifdef LARGE_MEMORY
     PRINT_ITEM(leye);
     PRINT_ITEM(reye);
     PRINT_ITEM(nose);
     PRINT_ITEM(lmouth);
     PRINT_ITEM(rmouth);
+#endif
   }
   delay(1000);
 }

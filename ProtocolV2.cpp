@@ -12,11 +12,8 @@ static short send_index = 0;
 static short receive_index = 0;
 
 static bool send_fail = false;
-static bool receive_fail = false;
 
-static short content_current = 0;
 static short content_end = 0;
-static bool content_read_end = false;
 
 uint8_t *husky_lens_protocol_write_begin(eAlgorithm_t algo, uint8_t command) {
   send_fail = false;
@@ -315,7 +312,7 @@ int8_t ProtocolV2::getResult(eAlgorithm_t &algo) {
   int length = husky_lens_protocol_write_end();
   int8_t _count = 0;
   int8_t i = 0;
-  PacketData_t info;
+  PacketData_t info = {};
   PacketHead_t *head = (PacketHead_t *)receive_buffer;
   for (i = 0; i < retry; i++) {
     protocolWrite(buffer, length);
@@ -524,7 +521,6 @@ uint8_t ProtocolV2::learnBlock(eAlgorithm_t algo, int16_t x, int16_t y,
 // 后续返回值修改为String
 String ProtocolV2::takePhoto(eResolution_t resolution) {
   DBG("\n");
-  bool ret = false;
   uint8_t *buffer =
       husky_lens_protocol_write_begin(ALGORITHM_ANY, COMMAND_ACTION_TAKE_PHOTO);
   husky_lens_protocol_write_uint8(resolution);
@@ -550,7 +546,6 @@ String ProtocolV2::takePhoto(eResolution_t resolution) {
 // 后续返回值修改为String
 String ProtocolV2::takeScreenshot() {
   DBG("\n");
-  bool ret = false;
   uint8_t *buffer = husky_lens_protocol_write_begin(
       ALGORITHM_ANY, COMMAND_ACTION_TAKE_SCREENSHOT);
   int length = husky_lens_protocol_write_end();

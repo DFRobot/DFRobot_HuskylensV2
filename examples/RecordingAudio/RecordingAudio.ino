@@ -38,7 +38,7 @@ void setup() {
     Serial.println(F("\tgreen line >> SDA/TX; blue line >> SCL/RX"));
     delay(100);
   }
-  bool ret = huskylens.switchAlgorithm((eAlgorithm_t)(128));
+  huskylens.switchAlgorithm((eAlgorithm_t)(128));
   delay(5000);
 }
 

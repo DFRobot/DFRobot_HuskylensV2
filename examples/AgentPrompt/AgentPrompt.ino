@@ -22,6 +22,9 @@
  <https://wiki.dfrobot.com/HUSKYLENS_V1.0_SKU_SEN0305_SEN0336#target_23>
  2.Agent APIs require a large-memory board (ESP32 recommended).
  ****************************************************/
+#ifndef LARGE_MEMORY
+#error "The selected board does not support this example."
+#endif
 
 #include "DFRobot_HuskylensV2.h"
 

@@ -39,7 +39,7 @@ void setup() {
     Serial.println(F("\tgreen line >> SDA/TX; blue line >> SCL/RX"));
     delay(100);
   }
-  bool ret = huskylens.switchAlgorithm(ALGORITHM_FACE_RECOGNITION);
+  huskylens.switchAlgorithm(ALGORITHM_FACE_RECOGNITION);
   delay(5000);
 }
 
