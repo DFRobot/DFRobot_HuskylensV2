@@ -283,7 +283,7 @@ Data段
 | 4 | 2 | yCenter |
 | 6 | 2 | width |
 | 8 | 2 | height |
-| 10 | 4 | confidence |
+| 10 | 4 | conf |
 | 14 | 1 | name length |
 | 15 | n | name |
 | 15+n | 1 | content length |

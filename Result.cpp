@@ -10,7 +10,7 @@ Result::Result(const void *buf) {
   yCenter = packet->second;
   width = packet->third;
   height = packet->fourth;
-  confidence = packet->confidence;
+  conf = packet->conf;
   used = 0;
   String_t *pname = (String_t *)packet->payload;
   uint16_t headerSize = (uint16_t)((uint32_t)pname - (uint32_t)packet);

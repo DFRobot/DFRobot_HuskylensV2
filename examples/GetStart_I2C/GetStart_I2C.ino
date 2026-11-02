@@ -61,6 +61,7 @@ void loop() {
     Serial.print(result->yCenter);
     Serial.println(")");
 
+    Serial.print("result->width=");
     Serial.println(result->width);
     Serial.print("result->height=");
     Serial.println(result->height);
@@ -68,6 +69,8 @@ void loop() {
     Serial.println(result->name);
     Serial.print("result->content=");
     Serial.println(result->content);
+    Serial.print("result->conf=");
+    Serial.println(result->conf);
   }
   delay(1000);
 }

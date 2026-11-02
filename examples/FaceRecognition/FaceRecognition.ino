@@ -84,6 +84,8 @@ void loop() {
     Serial.println(result->name);
     Serial.print("result->content=");
     Serial.println(result->content);
+    Serial.print("result->conf=");
+    Serial.println(result->conf);
 
 #ifdef LARGE_MEMORY
     PRINT_ITEM(leye);

@@ -301,7 +301,7 @@ typedef struct __attribute__((packed)) {
   };
   union {
     int32_t fifth;
-    float   confidence;
+    float   conf;
   };
   int8_t payload[0];
 } PacketData_t;

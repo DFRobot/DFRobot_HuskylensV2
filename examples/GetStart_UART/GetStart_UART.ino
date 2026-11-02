@@ -90,6 +90,7 @@ void loop() {
     Serial.print(result->yCenter, HEX);
     Serial.println(")");
 
+    Serial.print("result->width=");
     Serial.println(result->width, HEX);
     Serial.print("result->height=");
     Serial.println(result->height, HEX);
@@ -97,6 +98,8 @@ void loop() {
     Serial.println(result->name);
     Serial.print("result->content=");
     Serial.println(result->content);
+    Serial.print("result->conf=");
+    Serial.println(result->conf);
   }
   delay(1000);
 }

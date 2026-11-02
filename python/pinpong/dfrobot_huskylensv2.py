@@ -188,7 +188,7 @@ class UnionInt16_3(ctypes.Union):
 class UnionInt32_0(ctypes.Union):
     _fields_ = [
         ("fifth", ctypes.c_int32),
-        ("confidence", ctypes.c_float),
+        ("conf", ctypes.c_float),
     ]
 
 class PacketData_t(ctypes.Structure):
@@ -234,9 +234,9 @@ class Result(PacketData_t):
         self.third = read_u16(buf, base + 6)
         self.fourth = read_u16(buf, base + 8)
         if len(buf) > base + 13:
-            self.confidence = struct.unpack_from('<f', bytes(buf[base + 10:base + 14]))[0]
+            self.conf = struct.unpack_from('<f', bytes(buf[base + 10:base + 14]))[0]
         else:
-            self.confidence = 0.0
+            self.conf = 0.0
         self.used = False
         
         str_idx = base + 14
