@@ -9,10 +9,7 @@ jobs:
   hook:
     runs-on: self-hosted
     steps:
-      - name: Checkout dev
-        uses: actions/checkout@v4
-        with:
-          ref: dev
-
+      # 不使用 actions/checkout：job 启动时无需从 GitHub 下载任何 action，
+      # 网络抖动不会在准备阶段杀死 job；仓库由钩子脚本自行拉取。
       - name: Run huskylens_hook.py
         run: python3 /home/dfrobot/huskylens_hook.py
