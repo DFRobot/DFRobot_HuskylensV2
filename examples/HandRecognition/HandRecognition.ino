@@ -24,12 +24,11 @@
  boards.
  ****************************************************/
 
- #ifndef LARGE_MEMORY
+#include "DFRobot_HuskylensV2.h"
+
+#ifndef LARGE_MEMORY
 #error "The selected board does not support this example."
 #endif
-
-
-#include "DFRobot_HuskylensV2.h"
 
 #define PRINT_ITEM(item)                                                       \
   Serial.print("result->" #item "=(");                                         \

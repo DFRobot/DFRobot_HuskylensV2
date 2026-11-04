@@ -25,12 +25,11 @@
  2.This code is tested on Microbit,ESP8266,ESP32
  boards.
  ****************************************************/
+#include "DFRobot_HuskylensV2.h"
+
 #ifndef LARGE_MEMORY
 #error "The selected board does not support this example."
 #endif
-
-
-#include "DFRobot_HuskylensV2.h"
 
 // HUSKYLENS green line >> SDA; blue line >> SCL
 HuskylensV2 huskylens;

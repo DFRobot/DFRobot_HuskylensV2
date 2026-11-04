@@ -22,11 +22,11 @@
  boards.
  ****************************************************/
 
+#include "DFRobot_HuskylensV2.h"
+
 #ifndef LARGE_MEMORY
 #error "The selected board does not support this example."
 #endif
-
-#include "DFRobot_HuskylensV2.h"
 
 int sensor_data1,sensor_data2,sensor_data3;
 String annotation;
