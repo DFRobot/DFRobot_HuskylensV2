@@ -1,0 +1,18 @@
+name: dev-ci
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  hook:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Run huskylens_hook.py
+        run: python3 /home/dfrobot/huskylens_hook.py
