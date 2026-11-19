@@ -17,6 +17,9 @@
 
 这个库提供了一个在Arduino兼容板上驱动二哈识图V2的接口。它支持UART和I2C通信协议，并提供各种计算机视觉算法，如物体识别、人脸检测、巡线等功能。
 
+> [!WARNING]
+> **固件要求：本Arduino库仅支持v1.4.2及以上版本的二哈识图V2固件。** 使用前请将设备固件升级至v1.4.2及以上版本，否则可能出现通信失败或返回结果错误的情况。
+
 ## 安装
 
 1. 从GitHub下载库文件
@@ -137,6 +140,21 @@ int16_t getCachedResultNum(eAlgorithm_t algo);
  */
 int16_t getCachedResultLearnedNum(eAlgorithm_t algo);
 ```
+
+### 结果结构
+
+上述所有结果获取方法均返回一个指向 `Result` 对象的指针。`Result` 类携带了 HuskyLens V2 在 `RETURN_BLOCKS` 协议帧中上报的通用字段：
+
+| 字段 | 类型 | 说明 |
+| :--: | :----: | :--: |
+| ID | uint8_t | 对象的学习ID，0表示未学习 |
+| xCenter | int16_t | 区块中心X坐标 |
+| yCenter | int16_t | 区块中心Y坐标 |
+| width | int16_t | 区块宽度 |
+| height | int16_t | 区块高度 |
+| conf | float | 识别结果的置信度（仅对方块（block）类型结果有效；巡线返回的箭头类型结果不包含此字段） |
+| name | String | 识别对象的名称 |
+| content | String | 识别对象的内容（如二维码文本），算法不上报时为空 |
 
 ### 学习和知识管理方法
 
