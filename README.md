@@ -17,6 +17,9 @@
 
 This library provides an interface for driving the HuskyLens V2 on Arduino-compatible boards. It supports both UART and I2C communication protocols and provides various computer vision algorithms for object recognition, face detection, line tracking, and more.
 
+> [!WARNING]
+> **Firmware requirement: This Arduino library only supports HuskyLens V2 firmware version 1.4.2 or above.** Please upgrade your device firmware to v1.4.2+ before use, otherwise the library may fail to communicate or return incorrect results.
+
 ## Installation
 
 1. Download the library from GitHub
@@ -137,6 +140,21 @@ int16_t getCachedResultNum(eAlgorithm_t algo);
  */
 int16_t getCachedResultLearnedNum(eAlgorithm_t algo);
 ```
+
+### Result Structure
+
+All result retrieval methods above return a pointer to a `Result` object. The `Result` class carries the common fields reported by HuskyLens V2 in the `RETURN_BLOCKS` protocol frame:
+
+| Field | Type | Description |
+| :--: | :----: | :--: |
+| ID | uint8_t | The learned ID of the object. 0 means unlearned |
+| xCenter | int16_t | X coordinate of the block center |
+| yCenter | int16_t | Y coordinate of the block center |
+| width | int16_t | Width of the block |
+| height | int16_t | Height of the block |
+| conf | float | Confidence of the recognition result (only valid for block-type results; arrow results from line tracking do not carry this field) |
+| name | String | Name of the recognized object |
+| content | String | Content of the recognized object (e.g. QR code text), empty if the algorithm reports none |
 
 ### Learning and Knowledge Management Methods
 
